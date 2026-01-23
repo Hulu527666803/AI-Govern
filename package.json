@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup:mirror": "npm config set registry https://registry.npmmirror.com",
+    "install:fast": "npm run setup:mirror && npm install"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
@@ -18,7 +20,7 @@
     "react-router-dom": "^7.1.5"
   },
   "devDependencies": {
-    "@types/d3": "^7.9.0",
+    "@types/d3": "^7.4.30",
     "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
