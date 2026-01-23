@@ -1,0 +1,8 @@
+{
+  "name": "Data Governance Platform",
+  "description": "An AI-powered data governance platform that transforms raw data sources (SQL, XLS, DDL) into business ontologies following the ABC paradigm (Acquire, Build, Calculate) for intelligent Q&A systems.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
