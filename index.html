@@ -1,66 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UINO 智能数据治理平台</title>
-    <!-- 使用 Play CDN 确保样式引擎在预览模式下 100% 可用 -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
-                    },
-                },
-            },
-        }
-    </script>
-    <style type="text/tailwindcss">
-        @layer base {
-            body {
-                @apply antialiased bg-white text-slate-900 dark:bg-[#141414] dark:text-slate-300;
-                font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            }
-        }
-
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            @apply bg-slate-700 rounded-full;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            @apply bg-slate-600;
-        }
-
-        /* D3 Graph Styles */
-        .node-label {
-            @apply text-[10px] font-bold fill-slate-200 pointer-events-none;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-        }
-
-        .link-label {
-            @apply text-[8px] fill-slate-400 pointer-events-none;
-        }
-    </style>
 <script type="importmap">
 {
   "imports": {
