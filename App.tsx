@@ -1,11 +1,11 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { SourceSidebar } from './components/SourceSidebar';
 import { AnalysisCenter } from './components/AnalysisCenter';
 import { GovernanceStudio } from './components/GovernanceStudio';
-import { DataSource, DataDomain, GovernanceResult, SourceType } from './types';
-import { performGovernanceAnalysis } from './services/geminiService';
-import { X, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { DataSource, DataDomain, GovernanceResult, SourceType, AISettings, AIEngineType } from './types';
+import { performGovernanceAnalysis } from './services/aiService';
+// Fix: Added missing Zap icon to the lucide-react imports
+import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Save, ShieldCheck, Zap } from 'lucide-react';
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -17,6 +17,23 @@ const App: React.FC = () => {
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string; result?: GovernanceResult }[]>([]);
   const [selectedSource, setSelectedSource] = useState<DataSource | null>(null);
   const [activeNavTab, setActiveNavTab] = useState('智能治数');
+  
+  // AI Settings State
+  const [showSettings, setShowSettings] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AISettings>(() => {
+    const saved = localStorage.getItem('uino_ai_settings');
+    return saved ? JSON.parse(saved) : {
+      engine: 'GEMINI_SDK',
+      baseUrl: 'https://api.openai.com/v1',
+      modelName: 'gemini-3-pro-preview'
+    };
+  });
+
+  const saveSettings = (newSettings: AISettings) => {
+    setAiSettings(newSettings);
+    localStorage.setItem('uino_ai_settings', JSON.stringify(newSettings));
+    setShowSettings(false);
+  };
 
   const navItems = [
     '智能治数', '对象管理', '业务术语', '业务知识', '业务查询示例', 
@@ -72,7 +89,7 @@ const App: React.FC = () => {
     }
     
     if (activeDomainSources.length === 0) {
-      setChatHistory(prev => [...prev, { role: 'ai', text: `在 [${activeDomain?.name}] 业务域下暂无数据资产。请先接入元数据（如 DDL 或数据字典）以供分析。` }]);
+      setChatHistory(prev => [...prev, { role: 'ai', text: `在 [${activeDomain?.name}] 业务域下暂无数据资产。请先接入元数据以供分析。` }]);
       return;
     }
     
@@ -81,17 +98,17 @@ const App: React.FC = () => {
 
     try {
       const sourceContext = activeDomainSources.map(s => `[资产类型: ${s.type}, 资产名称: ${s.name}]\n资产内容: ${s.content}`).join('\n\n');
-      const result = await performGovernanceAnalysis(sourceContext, prompt);
+      const result = await performGovernanceAnalysis(sourceContext, prompt, aiSettings);
       
       setGovernanceResult(result);
       setChatHistory(prev => [...prev, { 
         role: 'ai', 
-        text: `分析已完成。基于 [${activeDomain?.name}] 业务域下的 ${activeDomainSources.length} 个数据资产，我已完成本体建模与知识沉淀。您可以在右侧面板查看具体成果。`,
+        text: `分析已完成。模型使用 [${aiSettings.modelName}] 完成了建模推演。`,
         result: result 
       }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setChatHistory(prev => [...prev, { role: 'ai', text: "抱歉，分析过程中出现了错误。请检查您的元数据内容并重试。" }]);
+      setChatHistory(prev => [...prev, { role: 'ai', text: `分析出错: ${error.message || "请求失败"}` }]);
     } finally {
       setIsAnalyzing(false);
     }
@@ -126,27 +143,24 @@ const App: React.FC = () => {
             ))}
           </nav>
         </div>
-        <div className="ml-auto flex items-center gap-6">
+        <div className="ml-auto flex items-center gap-4">
+          <button 
+            onClick={() => setShowSettings(true)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-xs font-bold ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030] text-slate-300 hover:text-white' : 'bg-gray-100 border-gray-200 text-slate-600 hover:bg-white hover:border-blue-400'}`}
+          >
+            <SettingsIcon size={14} />
+            AI 配置
+          </button>
           <button 
             onClick={toggleTheme}
             className={`p-2 rounded-full transition-all ${theme === 'dark' ? 'bg-[#1d1d1d] text-yellow-400 border border-[#303030]' : 'bg-gray-100 text-slate-600 border border-gray-200'}`}
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
-            <span className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${theme === 'dark' ? 'text-blue-300 bg-blue-500/20 border-blue-500/40' : 'text-blue-600 bg-blue-50 border-blue-200'}`}>
-              <span className="relative flex h-1.5 w-1.5">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'}`}></span>
-                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${theme === 'dark' ? 'bg-blue-400' : 'bg-blue-500'}`}></span>
-              </span>
-              智能治理引擎
-            </span>
-          </div>
         </div>
       </header>
 
       <main className="flex w-full pt-16 h-full relative">
-        {/* Left Sidebar */}
         <aside className={`w-80 h-full border-r flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
           <SourceSidebar 
             domains={domains}
@@ -161,7 +175,6 @@ const App: React.FC = () => {
           />
         </aside>
 
-        {/* Center */}
         <section className={`flex-1 h-full overflow-hidden relative transition-colors ${theme === 'dark' ? 'bg-black' : 'bg-gray-50'}`}>
           {selectedSource ? (
             <div className={`absolute inset-0 z-10 p-8 overflow-y-auto no-scrollbar animate-in fade-in zoom-in duration-300 transition-colors ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
@@ -174,12 +187,7 @@ const App: React.FC = () => {
                   </div>
                   <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{selectedSource.name}</h2>
                 </div>
-                <button 
-                  onClick={() => setSelectedSource(null)}
-                  className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-[#1d1d1d] text-slate-400' : 'hover:bg-gray-100 text-slate-500'}`}
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <button onClick={() => setSelectedSource(null)} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-[#1d1d1d] text-slate-400' : 'hover:bg-gray-100 text-slate-500'}`}><X size={20} /></button>
               </div>
               <div className={`p-6 rounded-2xl border shadow-2xl transition-colors ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
                  <pre className={`font-mono text-[13px] leading-relaxed overflow-x-auto whitespace-pre-wrap ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
@@ -197,6 +205,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                        <span className="text-[10px] font-bold text-slate-400">已接入资产: {activeDomainSources.length}</span>
+                       <span className={`text-[10px] px-2 py-0.5 rounded border ${theme === 'dark' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>{aiSettings.modelName}</span>
                     </div>
                  </div>
               )}
@@ -204,18 +213,111 @@ const App: React.FC = () => {
                 isAnalyzing={isAnalyzing} 
                 chatHistory={chatHistory} 
                 onAnalyze={handleStartGovernance} 
+                onOpenSettings={() => setShowSettings(true)}
                 activeDomainName={activeDomain?.name}
+                aiSettings={aiSettings}
                 theme={theme}
               />
             </div>
           )}
         </section>
 
-        {/* Right Sidebar */}
         <aside className={`w-[460px] h-full border-l flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
           <GovernanceStudio result={governanceResult} theme={theme} />
         </aside>
       </main>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={() => setShowSettings(false)}></div>
+          <div className={`relative w-full max-w-lg rounded-[40px] border shadow-[0_25px_80px_rgba(0,0,0,0.5)] overflow-hidden animate-in zoom-in duration-300 ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-gray-200'}`}>
+            <div className="p-10">
+              <div className="flex justify-between items-center mb-10">
+                <div>
+                  <h3 className={`text-2xl font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>AI 核心引擎配置</h3>
+                  <p className="text-[11px] text-slate-500 mt-1 uppercase tracking-widest font-black">定义治数大模型的接入协议与参数</p>
+                </div>
+                <button onClick={() => setShowSettings(false)} className="p-2 text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
+              </div>
+
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">引擎协议架构</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { id: 'GEMINI_SDK', label: 'Gemini Native', desc: '原生 SDK 加速', icon: <Zap size={20} /> },
+                      { id: 'OPENAI_COMPATIBLE', label: 'Universal AI', desc: 'OpenAI 兼容协议', icon: <Globe size={20} /> }
+                    ].map(engine => (
+                      <button
+                        key={engine.id}
+                        onClick={() => setAiSettings({...aiSettings, engine: engine.id as AIEngineType})}
+                        className={`flex flex-col items-start gap-3 p-5 rounded-3xl border-2 transition-all ${
+                          aiSettings.engine === engine.id 
+                            ? (theme === 'dark' ? 'bg-[#177ddc]/10 border-[#177ddc] text-white' : 'bg-blue-50 border-blue-500 text-blue-700') 
+                            : (theme === 'dark' ? 'bg-black/40 border-[#303030] text-slate-500 hover:border-slate-600' : 'bg-gray-50 border-gray-100 text-slate-400 hover:bg-white')
+                        }`}
+                      >
+                        <div className={`p-2 rounded-xl ${aiSettings.engine === engine.id ? 'bg-[#177ddc] text-white' : (theme === 'dark' ? 'bg-[#1d1d1d] text-slate-500' : 'bg-white text-slate-400')}`}>
+                          {engine.icon}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold">{engine.label}</div>
+                          <div className="text-[10px] font-medium opacity-60">{engine.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">模型标识符 (Model Name)</label>
+                    <input 
+                      className={`w-full px-5 h-14 rounded-2xl border outline-none font-bold transition-colors ${theme === 'dark' ? 'bg-black border-[#303030] text-white focus:border-[#177ddc]' : 'bg-gray-50 border-gray-200 text-slate-900 focus:border-blue-500'}`}
+                      placeholder={aiSettings.engine === 'GEMINI_SDK' ? "gemini-3-pro-preview" : "gpt-4o"}
+                      value={aiSettings.modelName}
+                      onChange={e => setAiSettings({...aiSettings, modelName: e.target.value})}
+                    />
+                  </div>
+
+                  {aiSettings.engine === 'OPENAI_COMPATIBLE' && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">API Base URL</label>
+                      <input 
+                        className={`w-full px-5 h-14 rounded-2xl border outline-none font-mono text-xs transition-colors ${theme === 'dark' ? 'bg-black border-[#303030] text-white focus:border-[#177ddc]' : 'bg-gray-50 border-gray-200 text-slate-900 focus:border-blue-500'}`}
+                        placeholder="https://api.openai.com/v1"
+                        value={aiSettings.baseUrl}
+                        onChange={e => setAiSettings({...aiSettings, baseUrl: e.target.value})}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className={`p-5 rounded-3xl border flex items-center gap-4 transition-colors ${theme === 'dark' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-100'}`}>
+                   <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                      <ShieldCheck size={20} />
+                   </div>
+                   <div className="flex-1">
+                      <div className={`text-[11px] font-bold ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>API 密钥安全托管</div>
+                      <div className="text-[9px] text-slate-500 font-medium">密钥统一由环境变量注入，确保生产环境凭证安全。</div>
+                   </div>
+                </div>
+
+                <div className="pt-4">
+                  <button 
+                    onClick={() => saveSettings(aiSettings)}
+                    className={`w-full py-5 rounded-3xl flex items-center justify-center gap-3 text-sm font-black uppercase tracking-[0.2em] transition-all shadow-xl group ${theme === 'dark' ? 'bg-[#177ddc] hover:bg-[#1668dc] text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                  >
+                    <Save size={18} className="group-hover:scale-110 transition-transform" />
+                    应用 AI 配置并保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

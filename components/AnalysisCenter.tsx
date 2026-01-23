@@ -1,13 +1,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Loader2, ChevronDown, ChevronUp, Brain, CheckCircle2, User, Bot, Paperclip, Mic, Cpu } from 'lucide-react';
-import { GovernanceResult, ThinkingStep } from '../types';
+import { Send, Sparkles, Loader2, Brain, CheckCircle2, User, Bot, Paperclip, Cpu, Settings as SettingsIcon, Zap, Globe } from 'lucide-react';
+import { GovernanceResult, ThinkingStep, AISettings } from '../types';
 
 interface AnalysisCenterProps {
   isAnalyzing: boolean;
   chatHistory: { role: 'user' | 'ai'; text: string; result?: GovernanceResult }[];
   onAnalyze: (prompt: string) => void;
+  onOpenSettings: () => void;
   activeDomainName?: string;
+  aiSettings: AISettings;
   theme?: 'light' | 'dark';
 }
 
@@ -59,7 +61,7 @@ const ThinkingLog: React.FC<{ steps: ThinkingStep[]; isLive?: boolean; theme?: '
   );
 };
 
-export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, chatHistory, onAnalyze, activeDomainName, theme = 'dark' }) => {
+export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, chatHistory, onAnalyze, onOpenSettings, activeDomainName, aiSettings, theme = 'dark' }) => {
   const [input, setInput] = useState('');
   const [liveSteps, setLiveSteps] = useState<ThinkingStep[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -106,13 +108,27 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
       <div className="flex-1 overflow-y-auto no-scrollbar pt-10 pb-40">
         <div className="max-w-3xl mx-auto px-6 space-y-12">
           {chatHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center animate-in fade-in duration-700">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-8 border transition-all ${isDark ? 'bg-gradient-to-br from-[#177ddc] to-[#1668dc] text-white shadow-[0_0_40px_rgba(23,125,220,0.25)] border-[#177ddc]/30' : 'bg-white text-[#1677ff] shadow-xl border-gray-100'}`}>
-                <Sparkles className="w-7 h-7" />
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in duration-700">
+              <div className="relative mb-12 group cursor-pointer" onClick={onOpenSettings}>
+                <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center border transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 ${isDark ? 'bg-gradient-to-br from-[#177ddc] to-[#1668dc] text-white shadow-[0_0_60px_rgba(23,125,220,0.3)] border-[#177ddc]/30' : 'bg-white text-[#1677ff] shadow-2xl border-gray-100'}`}>
+                  {aiSettings.engine === 'GEMINI_SDK' ? <Sparkles className="w-10 h-10" /> : <Brain className="w-10 h-10" />}
+                </div>
+                <div className={`absolute -bottom-2 -right-2 p-1.5 rounded-xl border shadow-xl transition-all ${isDark ? 'bg-black border-[#303030] text-slate-400 group-hover:text-blue-400' : 'bg-white border-gray-200 text-slate-500 group-hover:text-blue-500'}`}>
+                  <SettingsIcon size={16} className="group-hover:rotate-90 transition-transform duration-500" />
+                </div>
               </div>
+
               <h2 className={`text-3xl font-bold mb-4 tracking-tight transition-colors ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {activeDomainName ? `数据治理：${activeDomainName}` : '准备好开始了吗？'}
+                {activeDomainName ? `智能治数域：${activeDomainName}` : '准备好开始了吗？'}
               </h2>
+              
+              <div className={`flex items-center gap-2 mb-10 px-4 py-1.5 rounded-full border transition-all ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-slate-400' : 'bg-white border-gray-200 text-slate-500 shadow-sm'}`}>
+                {aiSettings.engine === 'GEMINI_SDK' ? <Zap size={14} className="text-yellow-400" /> : <Globe size={14} className="text-blue-400" />}
+                <span className="text-[11px] font-black uppercase tracking-widest">
+                  当前引擎: {aiSettings.engine === 'GEMINI_SDK' ? 'Gemini Native' : 'Universal AI'} ({aiSettings.modelName})
+                </span>
+              </div>
+
               <p className={`max-w-md text-sm leading-relaxed mb-12 font-medium transition-colors ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {activeDomainName 
                   ? `我已准备好对 [${activeDomainName}] 域进行 G-ABC 本体分析。下达指令后，您将实时看到我的思考推演过程。`
@@ -196,10 +212,14 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
       <div className={`absolute bottom-0 left-0 right-0 pt-10 pb-8 px-6 z-20 transition-colors ${isDark ? 'bg-gradient-to-t from-black via-black/95 to-transparent' : 'bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent'}`}>
         <div className="max-w-3xl mx-auto relative">
           <form onSubmit={handleSubmit} className="relative group">
-            {/* Fixed the syntax of className to use a proper template literal and removed extraneous characters */}
             <div className={`relative border rounded-[28px] shadow-2xl p-2 pr-2.5 flex items-end gap-2 transition-all focus-within:border-blue-500/50 ${isDark ? 'bg-[#1d1d1d] border-[#303030] shadow-[0_15px_40px_rgba(0,0,0,0.6)] focus-within:bg-black' : 'bg-white border-gray-200 shadow-[0_10px_30px_rgba(0,0,0,0.05)] focus-within:border-blue-300'}`}>
-              <button type="button" className={`p-3 transition-colors ${isDark ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-600'}`}>
-                <Paperclip className="w-5 h-5" />
+              <button 
+                type="button" 
+                onClick={onOpenSettings}
+                className={`p-3 transition-colors ${isDark ? 'text-slate-500 hover:text-blue-400' : 'text-slate-400 hover:text-blue-500'}`}
+                title="AI 引擎配置"
+              >
+                <Cpu className="w-5 h-5" />
               </button>
               
               <textarea 
@@ -228,7 +248,7 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
             </div>
           </form>
           <p className={`mt-3 text-center text-[10px] font-medium tracking-wide uppercase ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-            UINO 智能治理专家 · 基于 G-ABC 核心范式实时推演
+            UINO 智能治理专家 · 当前模型: {aiSettings.modelName}
           </p>
         </div>
       </div>

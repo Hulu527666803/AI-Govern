@@ -63,7 +63,6 @@ export interface BusinessKnowledge {
 }
 
 export interface ThinkingStep {
-  // Added 'G' phase for physical metadata parsing
   phase: 'G' | 'A' | 'B' | 'C';
   title: string;
   description: string;
@@ -84,4 +83,12 @@ export interface GovernanceResult {
   knowledge: BusinessKnowledge[];
   sampleData: SampleData[];
   summary: string;
+}
+
+export type AIEngineType = 'GEMINI_SDK' | 'OPENAI_COMPATIBLE';
+
+export interface AISettings {
+  engine: AIEngineType;
+  baseUrl: string;
+  modelName: string;
 }
