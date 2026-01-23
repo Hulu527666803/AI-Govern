@@ -42,9 +42,16 @@ export const performGovernanceAnalysis = async (
   settings: AISettings
 ): Promise<GovernanceResult> => {
   const prompt = `原始元数据资产：\n${sources}\n\n当前治理指令：\n${userPrompt}`;
+  
+  // 使用配置的 API Key，如果没有则回退到环境变量
+  const apiKey = settings.apiKey || process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('未配置 API Key，请在 AI 配置中设置密钥或通过环境变量注入');
+  }
 
   if (settings.engine === 'GEMINI_SDK') {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: settings.modelName || 'gemini-3-pro-preview',
       contents: prompt,
@@ -65,7 +72,7 @@ export const performGovernanceAnalysis = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: settings.modelName,

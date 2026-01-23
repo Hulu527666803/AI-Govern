@@ -10,29 +10,20 @@ import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Sa
 
 // 使用 static/img/system_icon.png 展示项目标识
 const UinoLogo = ({ theme }: { theme: 'light' | 'dark' }) => (
-  <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.location.href = '/'}>
+  <div className="flex items-center group cursor-pointer" onClick={() => window.location.href = '/'}>
     <div className="relative flex items-center justify-center">
       <img 
-        src="static/img/system_icon.png" 
-        alt="UINO Logo" 
-        className="w-9 h-9 object-contain transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+        src="/img/system_icon.png" 
+        alt="System Logo" 
+        className="object-contain transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+        style={{ width: '108px', height: '24px' }}
         onError={(e) => {
-          // 容错：如果图片路径不匹配，显示一个精致的占位背景
-          (e.target as HTMLImageElement).classList.add('opacity-0');
+          console.error('Logo image failed to load from /img/system_icon.png');
+          (e.target as HTMLImageElement).style.display = 'none';
         }}
       />
       {/* 品牌装饰光晕 */}
       <div className="absolute inset-0 bg-blue-500/10 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-    </div>
-    <div className="flex flex-col leading-tight select-none">
-      <div className="flex items-center gap-1">
-        <span className={`text-base font-black tracking-tighter uppercase ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-          UINO <span className="text-blue-500">AI</span>
-        </span>
-      </div>
-      <span className="text-[8px] font-bold text-slate-500 tracking-[0.12em] uppercase whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity">
-        Intelligence Platform
-      </span>
     </div>
   </div>
 );
@@ -337,6 +328,17 @@ const App: React.FC = () => {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">API 密钥 (API Key)</label>
+                    <input 
+                      type="password"
+                      className={`w-full px-5 h-14 rounded-2xl border outline-none font-mono text-xs transition-colors ${theme === 'dark' ? 'bg-black border-[#303030] text-white focus:border-[#177ddc]' : 'bg-gray-50 border-gray-200 text-slate-900 focus:border-blue-500'}`}
+                      placeholder={aiSettings.engine === 'GEMINI_SDK' ? "AIza..." : "sk-..."}
+                      value={aiSettings.apiKey || ''}
+                      onChange={e => setAiSettings({...aiSettings, apiKey: e.target.value})}
+                    />
+                  </div>
+
                   {aiSettings.engine === 'OPENAI_COMPATIBLE' && (
                     <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">API Base URL</label>
@@ -355,8 +357,8 @@ const App: React.FC = () => {
                       <ShieldCheck size={20} />
                    </div>
                    <div className="flex-1">
-                      <div className={`text-[11px] font-bold ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>API 密钥安全托管</div>
-                      <div className="text-[9px] text-slate-500 font-medium">密钥统一由环境变量注入，确保生产环境凭证安全。</div>
+                      <div className={`text-[11px] font-bold ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>API 密钥本地存储</div>
+                      <div className="text-[9px] text-slate-500 font-medium">密钥将存储在浏览器本地，仅用于当前设备的 AI 请求。</div>
                    </div>
                 </div>
 

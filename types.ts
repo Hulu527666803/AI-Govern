@@ -91,4 +91,5 @@ export interface AISettings {
   engine: AIEngineType;
   baseUrl: string;
   modelName: string;
+  apiKey?: string;
 }
