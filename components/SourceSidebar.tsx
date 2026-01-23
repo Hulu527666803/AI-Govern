@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck } from 'lucide-react';
+import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown } from 'lucide-react';
 import { SourceType, DataSource, DataDomain } from '../types';
+import { testDatabaseConnection, getDatabaseMetadata, formatMetadata, DATABASE_TYPES } from '../services/databaseService';
 
 interface SourceSidebarProps {
   domains: DataDomain[];
@@ -48,6 +49,13 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     username: '',
     password: '',
   });
+  
+  const [showDbTypeDropdown, setShowDbTypeDropdown] = useState(false);
+  
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [fetchedMetadata, setFetchedMetadata] = useState('');
 
   const resetAssetForm = () => {
     setAssetName('');
@@ -58,6 +66,22 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
       dbType: 'MySQL', host: '', port: '3306', database: '', username: '', password: '',
     });
     setFileName(null);
+    setIsTestingConnection(false);
+    setConnectionStatus('idle');
+    setConnectionMessage('');
+    setFetchedMetadata('');
+    setShowDbTypeDropdown(false);
+  };
+  
+  const handleDbTypeChange = (dbType: string) => {
+    const dbTypeConfig = DATABASE_TYPES.find(t => t.id === dbType);
+    setDbConfig({
+      ...dbConfig,
+      dbType: dbType,
+      port: dbTypeConfig?.defaultPort || '3306'
+    });
+    setShowDbTypeDropdown(false);
+    setConnectionStatus('idle');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,15 +98,47 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     }
   };
 
+  const testDatabaseConnectionHandler = async () => {
+    setIsTestingConnection(true);
+    setConnectionStatus('idle');
+    setConnectionMessage('正在测试连接...');
+    
+    try {
+      // 测试连接
+      const testResult = await testDatabaseConnection(dbConfig);
+      
+      if (!testResult.success) {
+        throw new Error(testResult.message);
+      }
+      
+      setConnectionStatus('success');
+      setConnectionMessage('连接成功！正在获取元数据...');
+      
+      // 获取元数据
+      const metadata = await getDatabaseMetadata(dbConfig);
+      const metadataText = formatMetadata(metadata);
+      setFetchedMetadata(metadataText);
+      setConnectionMessage(`✓ 成功获取 ${metadata.tables?.length || 0} 张表的元数据`);
+      
+    } catch (error: any) {
+      setConnectionStatus('error');
+      setConnectionMessage(error.message || '连接失败，请检查配置');
+      setFetchedMetadata('');
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
   const handleAssetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     let finalContent = "";
     
     if (assetType === SourceType.DATABASE) {
-      finalContent = JSON.stringify({ 
-        info: `JDBC Connection to ${dbConfig.dbType}`, 
-        config: { ...dbConfig, password: '****' } 
-      }, null, 2);
+      if (connectionStatus !== 'success' || !fetchedMetadata) {
+        alert('请先测试连接并成功获取元数据后再提交');
+        return;
+      }
+      finalContent = fetchedMetadata;
     } else {
       finalContent = textContent;
     }
@@ -302,57 +358,176 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
                  {/* 动态表单内容 */}
                  <div className="space-y-4">
                     {assetType === SourceType.DATABASE ? (
-                      <div className={`grid grid-cols-2 gap-4 p-6 rounded-3xl border ${isDark ? 'bg-black/40 border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="col-span-2 flex items-center gap-2 mb-2">
-                           <Server size={14} className="text-blue-500" />
-                           <span className="text-[10px] font-black text-slate-500 uppercase">JDBC 连接配置</span>
+                      <div className="space-y-4">
+                        <div className={`grid grid-cols-2 gap-4 p-6 rounded-3xl border ${isDark ? 'bg-black/40 border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
+                          <div className="col-span-2 flex items-center gap-2 mb-2">
+                             <Server size={14} className="text-blue-500" />
+                             <span className="text-[10px] font-black text-slate-500 uppercase">JDBC 连接配置</span>
+                          </div>
+                          
+                          {/* 数据库类型选择 */}
+                          <div className="col-span-2 space-y-1.5 relative">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">数据库类型</label>
+                            <button
+                              type="button"
+                              onClick={() => setShowDbTypeDropdown(!showDbTypeDropdown)}
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none flex items-center justify-between transition-all ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white hover:border-slate-600' : 'bg-white border-gray-200 hover:border-blue-300'}`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span>{DATABASE_TYPES.find(t => t.id === dbConfig.dbType)?.icon}</span>
+                                <span>{DATABASE_TYPES.find(t => t.id === dbConfig.dbType)?.name}</span>
+                              </span>
+                              <ChevronDown size={14} className={`transition-transform ${showDbTypeDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            
+                            {showDbTypeDropdown && (
+                              <div className={`absolute z-50 w-full mt-1 rounded-xl border shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200'}`}>
+                                {DATABASE_TYPES.map((dbType) => (
+                                  <button
+                                    key={dbType.id}
+                                    type="button"
+                                    onClick={() => handleDbTypeChange(dbType.id)}
+                                    className={`w-full px-4 py-3 text-xs flex items-center gap-3 transition-all ${
+                                      dbConfig.dbType === dbType.id
+                                        ? (isDark ? 'bg-[#177ddc]/20 text-white' : 'bg-blue-50 text-blue-700')
+                                        : (isDark ? 'text-slate-300 hover:bg-[#252525]' : 'text-slate-600 hover:bg-gray-50')
+                                    }`}
+                                  >
+                                    <span className="text-base">{dbType.icon}</span>
+                                    <div className="flex-1 text-left">
+                                      <div className="font-bold">{dbType.name}</div>
+                                      <div className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{dbType.description} · 默认端口: {dbType.defaultPort}</div>
+                                    </div>
+                                    {dbConfig.dbType === dbType.id && (
+                                      <CheckCircle size={14} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">主机地址</label>
+                            <input 
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
+                              placeholder="127.0.0.1" 
+                              value={dbConfig.host}
+                              onChange={e => { setDbConfig({...dbConfig, host: e.target.value}); setConnectionStatus('idle'); }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">端口</label>
+                            <input 
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
+                              placeholder="3306" 
+                              value={dbConfig.port}
+                              onChange={e => { setDbConfig({...dbConfig, port: e.target.value}); setConnectionStatus('idle'); }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">数据库名称</label>
+                            <input 
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
+                              placeholder="db_name" 
+                              value={dbConfig.database}
+                              onChange={e => { setDbConfig({...dbConfig, database: e.target.value}); setConnectionStatus('idle'); }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">用户名</label>
+                            <input 
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
+                              placeholder="root" 
+                              value={dbConfig.username}
+                              onChange={e => { setDbConfig({...dbConfig, username: e.target.value}); setConnectionStatus('idle'); }}
+                            />
+                          </div>
+                          <div className="space-y-1.5 col-span-2">
+                            <label className="text-[9px] font-bold text-slate-500 ml-1">密码</label>
+                            <input 
+                              type="password"
+                              className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
+                              placeholder="******" 
+                              value={dbConfig.password}
+                              onChange={e => { setDbConfig({...dbConfig, password: e.target.value}); setConnectionStatus('idle'); }}
+                            />
+                          </div>
+                          
+                          <div className="col-span-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={testDatabaseConnectionHandler}
+                              disabled={!dbConfig.host || !dbConfig.database || !dbConfig.username || isTestingConnection}
+                              className={`w-full py-3 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all border ${
+                                isTestingConnection
+                                  ? (isDark ? 'bg-[#1d1d1d] border-[#303030] text-slate-500 cursor-wait' : 'bg-gray-100 border-gray-200 text-slate-400 cursor-wait')
+                                  : connectionStatus === 'success'
+                                  ? (isDark ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-green-50 border-green-300 text-green-700')
+                                  : connectionStatus === 'error'
+                                  ? (isDark ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-red-50 border-red-300 text-red-700')
+                                  : (isDark ? 'bg-[#177ddc] border-[#1668dc] text-white hover:bg-[#1668dc]' : 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700')
+                              }`}
+                            >
+                              {isTestingConnection ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                                  测试连接中...
+                                </>
+                              ) : connectionStatus === 'success' ? (
+                                <>
+                                  <ShieldCheck size={16} />
+                                  连接成功并获取元数据
+                                </>
+                              ) : connectionStatus === 'error' ? (
+                                <>
+                                  <X size={16} />
+                                  连接失败，点击重试
+                                </>
+                              ) : (
+                                <>
+                                  <Database size={16} />
+                                  测试连接并获取元数据
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-bold text-slate-500 ml-1">主机地址</label>
-                          <input 
-                            className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
-                            placeholder="127.0.0.1" 
-                            value={dbConfig.host}
-                            onChange={e => setDbConfig({...dbConfig, host: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-bold text-slate-500 ml-1">端口</label>
-                          <input 
-                            className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
-                            placeholder="3306" 
-                            value={dbConfig.port}
-                            onChange={e => setDbConfig({...dbConfig, port: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-bold text-slate-500 ml-1">数据库名称</label>
-                          <input 
-                            className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
-                            placeholder="db_name" 
-                            value={dbConfig.database}
-                            onChange={e => setDbConfig({...dbConfig, database: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-bold text-slate-500 ml-1">用户名</label>
-                          <input 
-                            className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
-                            placeholder="root" 
-                            value={dbConfig.username}
-                            onChange={e => setDbConfig({...dbConfig, username: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-1.5 col-span-2">
-                          <label className="text-[9px] font-bold text-slate-500 ml-1">密码</label>
-                          <input 
-                            type="password"
-                            className={`w-full px-4 h-10 text-xs rounded-xl border outline-none ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-white' : 'bg-white border-gray-200'}`} 
-                            placeholder="******" 
-                            value={dbConfig.password}
-                            onChange={e => setDbConfig({...dbConfig, password: e.target.value})}
-                          />
-                        </div>
+                        
+                        {/* 连接状态提示 */}
+                        {connectionMessage && (
+                          <div className={`p-4 rounded-2xl border flex items-start gap-3 animate-in slide-in-from-top-2 duration-300 ${
+                            connectionStatus === 'success'
+                              ? (isDark ? 'bg-green-500/10 border-green-500/30' : 'bg-green-50 border-green-200')
+                              : connectionStatus === 'error'
+                              ? (isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200')
+                              : (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200')
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                              connectionStatus === 'success' ? 'bg-green-500' 
+                              : connectionStatus === 'error' ? 'bg-red-500' 
+                              : 'bg-blue-500 animate-pulse'
+                            }`} />
+                            <p className={`text-xs font-medium ${
+                              connectionStatus === 'success' ? (isDark ? 'text-green-300' : 'text-green-700')
+                              : connectionStatus === 'error' ? (isDark ? 'text-red-300' : 'text-red-700')
+                              : (isDark ? 'text-blue-300' : 'text-blue-700')
+                            }`}>{connectionMessage}</p>
+                          </div>
+                        )}
+                        
+                        {/* 元数据预览 */}
+                        {fetchedMetadata && (
+                          <div className={`p-4 rounded-2xl border ${isDark ? 'bg-black/60 border-[#303030]' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileCode size={14} className={isDark ? 'text-green-400' : 'text-green-600'} />
+                              <span className="text-[10px] font-black text-slate-500 uppercase">已获取的元数据</span>
+                            </div>
+                            <div className={`max-h-48 overflow-y-auto custom-scrollbar p-3 rounded-xl ${isDark ? 'bg-[#0a0a0a]' : 'bg-white'}`}>
+                              <pre className={`text-[10px] font-mono leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{fetchedMetadata.split('\n').slice(0, 20).join('\n')}{fetchedMetadata.split('\n').length > 20 ? '\n...' : ''}</pre>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-4">

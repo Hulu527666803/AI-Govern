@@ -344,7 +344,7 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">API Base URL</label>
                       <input 
                         className={`w-full px-5 h-14 rounded-2xl border outline-none font-mono text-xs transition-colors ${theme === 'dark' ? 'bg-black border-[#303030] text-white focus:border-[#177ddc]' : 'bg-gray-50 border-gray-200 text-slate-900 focus:border-blue-500'}`}
-                        placeholder="https://api.openai.com/v1"
+                        placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
                         value={aiSettings.baseUrl}
                         onChange={e => setAiSettings({...aiSettings, baseUrl: e.target.value})}
                       />

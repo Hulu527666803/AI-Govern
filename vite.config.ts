@@ -12,6 +12,14 @@ export default defineConfig({
   server: {
     port: 8080,
     host: true,
-    allowedHosts: true // 允许 Cloud Shell 的预览域名
+    allowedHosts: true, // 允许 Cloud Shell 的预览域名
+    proxy: {
+      // 代理 API 请求到后端服务
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 });
