@@ -1,11 +1,41 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, useSearchParams, Navigate } from 'react-router-dom';
 import { SourceSidebar } from './components/SourceSidebar';
 import { AnalysisCenter } from './components/AnalysisCenter';
 import { GovernanceStudio } from './components/GovernanceStudio';
 import { DataSource, DataDomain, GovernanceResult, SourceType, AISettings, AIEngineType } from './types';
 import { performGovernanceAnalysis } from './services/aiService';
-// Fix: Added missing Zap icon to the lucide-react imports
 import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Save, ShieldCheck, Zap } from 'lucide-react';
+
+// 使用 static/img/system_icon.png 展示项目标识
+const UinoLogo = ({ theme }: { theme: 'light' | 'dark' }) => (
+  <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.location.href = '/'}>
+    <div className="relative flex items-center justify-center">
+      <img 
+        src="static/img/system_icon.png" 
+        alt="UINO Logo" 
+        className="w-9 h-9 object-contain transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+        onError={(e) => {
+          // 容错：如果图片路径不匹配，显示一个精致的占位背景
+          (e.target as HTMLImageElement).classList.add('opacity-0');
+        }}
+      />
+      {/* 品牌装饰光晕 */}
+      <div className="absolute inset-0 bg-blue-500/10 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+    </div>
+    <div className="flex flex-col leading-tight select-none">
+      <div className="flex items-center gap-1">
+        <span className={`text-base font-black tracking-tighter uppercase ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+          UINO <span className="text-blue-500">AI</span>
+        </span>
+      </div>
+      <span className="text-[8px] font-bold text-slate-500 tracking-[0.12em] uppercase whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity">
+        Intelligence Platform
+      </span>
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -16,9 +46,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string; result?: GovernanceResult }[]>([]);
   const [selectedSource, setSelectedSource] = useState<DataSource | null>(null);
-  const [activeNavTab, setActiveNavTab] = useState('智能治数');
   
-  // AI Settings State
   const [showSettings, setShowSettings] = useState(false);
   const [aiSettings, setAiSettings] = useState<AISettings>(() => {
     const saved = localStorage.getItem('uino_ai_settings');
@@ -29,6 +57,17 @@ const App: React.FC = () => {
     };
   });
 
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  
+  // 识别嵌入模式：当 URL 包含 mode=embedded 时隐藏导航栏和侧边栏
+  const isEmbedded = searchParams.get('mode') === 'embedded';
+
+  useEffect(() => {
+    document.documentElement.className = theme;
+  }, [theme]);
+
   const saveSettings = (newSettings: AISettings) => {
     setAiSettings(newSettings);
     localStorage.setItem('uino_ai_settings', JSON.stringify(newSettings));
@@ -36,8 +75,15 @@ const App: React.FC = () => {
   };
 
   const navItems = [
-    '智能治数', '对象管理', '业务术语', '业务知识', '业务查询示例', 
-    'MCP 服务', '热数据管理', '分析管理', '用户管理', '角色管理'
+    { label: '智能治数', path: '/governance' },
+    { label: '对象管理', path: '/objects' },
+    { label: '业务术语', path: '/glossary' },
+    { label: '业务知识', path: '/knowledge' },
+    { label: '业务查询', path: '/query' },
+    { label: 'MCP 服务', path: '/mcp' },
+    { label: '热数据', path: '/hot-data' },
+    { label: '分析管理', path: '/analytics' },
+    { label: '系统管理', path: '/system' }
   ];
 
   const activeDomain = useMemo(() => 
@@ -115,114 +161,124 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`flex h-screen w-full overflow-hidden font-sans transition-colors duration-300 ${theme === 'dark' ? 'dark bg-[#141414] text-[rgba(255,255,255,0.85)]' : 'bg-[#f5f5f5] text-[rgba(0,0,0,0.88)]'}`}>
-      {/* Header */}
-      <header className={`fixed top-0 left-0 right-0 h-16 border-b flex items-center px-6 z-50 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0] shadow-sm'}`}>
-        <div className="flex items-center gap-8 h-full">
-          <img 
-            src="https://www.uino.com/images/mhgfp1qu-qktnngs.png" 
-            alt="UINO Logo" 
-            className={`h-7 w-auto ${theme === 'dark' ? 'brightness-110' : ''}`}
-          />
-          <nav className="flex items-center h-full">
-            {navItems.map((item) => (
-              <button
-                key={item}
-                onClick={() => setActiveNavTab(item)}
-                className={`relative px-4 h-full text-[13px] font-semibold transition-colors ${
-                  activeNavTab === item 
-                    ? (theme === 'dark' ? 'text-[#177ddc]' : 'text-[#1677ff]')
-                    : (theme === 'dark' ? 'text-[rgba(255,255,255,0.65)] hover:text-white' : 'text-[rgba(0,0,0,0.65)] hover:text-[#1677ff]')
-                }`}
-              >
-                {item}
-                {activeNavTab === item && (
-                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-t-full transition-colors ${theme === 'dark' ? 'bg-[#177ddc] shadow-[0_0_8px_#177ddc]' : 'bg-[#1677ff]'}`}></span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="ml-auto flex items-center gap-4">
-          <button 
-            onClick={() => setShowSettings(true)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-xs font-bold ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030] text-slate-300 hover:text-white' : 'bg-gray-100 border-gray-200 text-slate-600 hover:bg-white hover:border-blue-400'}`}
-          >
-            <SettingsIcon size={14} />
-            AI 配置
-          </button>
-          <button 
-            onClick={toggleTheme}
-            className={`p-2 rounded-full transition-all ${theme === 'dark' ? 'bg-[#1d1d1d] text-yellow-400 border border-[#303030]' : 'bg-gray-100 text-slate-600 border border-gray-200'}`}
-          >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-      </header>
+    <div className={`flex h-screen w-full overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'dark bg-[#141414] text-slate-300' : 'bg-[#f5f5f5] text-slate-900'}`}>
+      {/* Header - 在嵌入模式下隐藏 */}
+      {!isEmbedded && (
+        <header className={`fixed top-0 left-0 right-0 h-16 border-b flex items-center px-6 z-50 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0] shadow-sm'}`}>
+          <div className="flex items-center gap-8 h-full">
+            <UinoLogo theme={theme} />
+            <nav className="flex items-center h-full">
+              {navItems.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`relative px-4 h-full text-[13px] font-semibold transition-colors ${
+                    location.pathname.startsWith(item.path)
+                      ? (theme === 'dark' ? 'text-[#177ddc]' : 'text-[#1677ff]')
+                      : (theme === 'dark' ? 'text-slate-500 hover:text-white' : 'text-slate-500 hover:text-[#1677ff]')
+                  }`}
+                >
+                  {item.label}
+                  {location.pathname.startsWith(item.path) && (
+                    <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-t-full transition-colors ${theme === 'dark' ? 'bg-[#177ddc] shadow-[0_0_8px_#177ddc]' : 'bg-[#1677ff]'}`}></span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div className="ml-auto flex items-center gap-4">
+            <button 
+              onClick={() => setShowSettings(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-xs font-bold ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030] text-slate-300 hover:text-white' : 'bg-gray-100 border-gray-200 text-slate-600 hover:bg-white hover:border-blue-400'}`}
+            >
+              <SettingsIcon size={14} />
+              AI 配置
+            </button>
+            <button 
+              onClick={toggleTheme}
+              className={`p-2 rounded-full transition-all ${theme === 'dark' ? 'bg-[#1d1d1d] text-yellow-400 border border-[#303030]' : 'bg-gray-100 text-slate-600 border border-gray-200'}`}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+          </div>
+        </header>
+      )}
 
-      <main className="flex w-full pt-16 h-full relative">
-        <aside className={`w-80 h-full border-r flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
-          <SourceSidebar 
-            domains={domains}
-            sources={activeDomainSources}
-            activeDomainId={activeDomainId}
-            onAddDomain={handleAddDomain}
-            onSelectDomain={handleSelectDomain}
-            onAddSource={handleAddSource} 
-            onSelectSource={setSelectedSource}
-            activeSourceId={selectedSource?.id}
-            theme={theme}
-          />
-        </aside>
+      <main className={`flex w-full h-full relative ${!isEmbedded ? 'pt-16' : ''}`}>
+        {/* Sidebar - 在嵌入模式下隐藏 */}
+        {!isEmbedded && (
+          <aside className={`w-80 h-full border-r flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
+            <SourceSidebar 
+              domains={domains}
+              sources={activeDomainSources}
+              activeDomainId={activeDomainId}
+              onAddDomain={handleAddDomain}
+              onSelectDomain={handleSelectDomain}
+              onAddSource={handleAddSource} 
+              onSelectSource={setSelectedSource}
+              activeSourceId={selectedSource?.id}
+              theme={theme}
+            />
+          </aside>
+        )}
 
         <section className={`flex-1 h-full overflow-hidden relative transition-colors ${theme === 'dark' ? 'bg-black' : 'bg-gray-50'}`}>
-          {selectedSource ? (
-            <div className={`absolute inset-0 z-10 p-8 overflow-y-auto no-scrollbar animate-in fade-in zoom-in duration-300 transition-colors ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
-              <div className={`flex items-center justify-between mb-6 pb-4 border-b ${theme === 'dark' ? 'border-[#303030]' : 'border-gray-100'}`}>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{activeDomain?.name}</span>
-                    <span className="text-[10px] text-slate-700">/</span>
-                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">资产详情：{selectedSource.type}</span>
+          <Routes>
+            <Route path="/governance" element={
+              <div className="h-full flex flex-col">
+                {selectedSource ? (
+                  <div className={`absolute inset-0 z-10 p-8 overflow-y-auto no-scrollbar animate-in fade-in zoom-in duration-300 transition-colors ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
+                    <div className={`flex items-center justify-between mb-6 pb-4 border-b ${theme === 'dark' ? 'border-[#303030]' : 'border-gray-100'}`}>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{activeDomain?.name}</span>
+                          <span className="text-[10px] text-slate-700">/</span>
+                          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">资产详情：{selectedSource.type}</span>
+                        </div>
+                        <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{selectedSource.name}</h2>
+                      </div>
+                      <button onClick={() => setSelectedSource(null)} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-[#1d1d1d] text-slate-400' : 'hover:bg-gray-100 text-slate-500'}`}><X size={20} /></button>
+                    </div>
+                    <div className={`p-6 rounded-2xl border shadow-2xl transition-colors ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
+                       <pre className={`font-mono text-[13px] leading-relaxed overflow-x-auto whitespace-pre-wrap ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
+                        {selectedSource.content}
+                      </pre>
+                    </div>
                   </div>
-                  <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{selectedSource.name}</h2>
-                </div>
-                <button onClick={() => setSelectedSource(null)} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-[#1d1d1d] text-slate-400' : 'hover:bg-gray-100 text-slate-500'}`}><X size={20} /></button>
+                ) : (
+                  <>
+                    {activeDomain && !isEmbedded && (
+                      <div className={`px-8 py-3 border-b flex items-center justify-between transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
+                        <div className="flex items-center gap-3">
+                          <LayoutDashboard className={`w-4 h-4 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
+                          <span className={`text-xs font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>当前治数域: {activeDomain.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400">已接入资产: {activeDomainSources.length}</span>
+                        </div>
+                      </div>
+                    )}
+                    <AnalysisCenter 
+                      isAnalyzing={isAnalyzing} 
+                      chatHistory={chatHistory} 
+                      onAnalyze={handleStartGovernance} 
+                      onOpenSettings={() => setShowSettings(true)}
+                      activeDomainName={activeDomain?.name || "未知业务域"}
+                      aiSettings={aiSettings}
+                      theme={theme}
+                    />
+                  </>
+                )}
               </div>
-              <div className={`p-6 rounded-2xl border shadow-2xl transition-colors ${theme === 'dark' ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
-                 <pre className={`font-mono text-[13px] leading-relaxed overflow-x-auto whitespace-pre-wrap ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
-                  {selectedSource.content}
-                </pre>
-              </div>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col">
-              {activeDomain && (
-                 <div className={`px-8 py-3 border-b flex items-center justify-between transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
-                    <div className="flex items-center gap-3">
-                      <LayoutDashboard className={`w-4 h-4 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
-                      <span className={`text-xs font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>当前治数域: {activeDomain.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <span className="text-[10px] font-bold text-slate-400">已接入资产: {activeDomainSources.length}</span>
-                       <span className={`text-[10px] px-2 py-0.5 rounded border ${theme === 'dark' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>{aiSettings.modelName}</span>
-                    </div>
-                 </div>
-              )}
-              <AnalysisCenter 
-                isAnalyzing={isAnalyzing} 
-                chatHistory={chatHistory} 
-                onAnalyze={handleStartGovernance} 
-                onOpenSettings={() => setShowSettings(true)}
-                activeDomainName={activeDomain?.name}
-                aiSettings={aiSettings}
-                theme={theme}
-              />
-            </div>
-          )}
+            } />
+            
+            <Route path="/objects" element={<div className="p-10 text-center"><h2 className="text-2xl font-bold">对象管理模块</h2><p className="mt-4 text-slate-500">该功能正在从治数结果中同步...</p></div>} />
+            <Route path="/glossary" element={<div className="p-10 text-center"><h2 className="text-2xl font-bold">业务术语表</h2><p className="mt-4 text-slate-500">查看已沉淀的业务规范术语</p></div>} />
+            <Route path="*" element={<Navigate to="/governance" replace />} />
+          </Routes>
         </section>
 
-        <aside className={`w-[460px] h-full border-l flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
+        <aside className={`${isEmbedded ? 'w-[400px]' : 'w-[460px]'} h-full border-l flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
           <GovernanceStudio result={governanceResult} theme={theme} />
         </aside>
       </main>
