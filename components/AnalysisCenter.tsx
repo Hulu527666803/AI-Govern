@@ -1,7 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Loader2, Brain, CheckCircle2, User, Bot, Paperclip, Cpu, Settings as SettingsIcon, Zap, Globe } from 'lucide-react';
 import { GovernanceResult, ThinkingStep, AISettings } from '../types';
+import { ContextPanel } from './ContextPanel';
+import { SessionPanel } from './SessionPanel';
 
 interface AnalysisCenterProps {
   isAnalyzing: boolean;
@@ -106,7 +107,20 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
   return (
     <div className={`flex flex-col h-full relative transition-colors ${isDark ? 'bg-black' : 'bg-gray-50'}`}>
       <div className="flex-1 overflow-y-auto no-scrollbar pt-10 pb-40">
-        <div className="max-w-3xl mx-auto px-6 space-y-12">
+        <div className="max-w-3xl mx-auto px-6 space-y-6">
+          {/* 会话管理面板 */}
+          <div className="animate-in fade-in duration-300">
+            <SessionPanel theme={theme} />
+          </div>
+          
+          {/* 上下文历史面板 */}
+          {chatHistory.length > 0 && (
+            <div className="animate-in fade-in duration-300">
+              <ContextPanel theme={theme} />
+            </div>
+          )}
+          
+          <div className="space-y-12">
           {chatHistory.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in duration-700">
               <div className="relative mb-12 group cursor-pointer" onClick={onOpenSettings}>
@@ -123,9 +137,9 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
               </h2>
               
               <div className={`flex items-center gap-2 mb-10 px-4 py-1.5 rounded-full border transition-all ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-slate-400' : 'bg-white border-gray-200 text-slate-500 shadow-sm'}`}>
-                {aiSettings.engine === 'GEMINI_SDK' ? <Zap size={14} className="text-yellow-400" /> : <Globe size={14} className="text-blue-400" />}
+                <Zap size={14} className="text-blue-400" />
                 <span className="text-[11px] font-black uppercase tracking-widest">
-                  当前引擎: {aiSettings.engine === 'GEMINI_SDK' ? 'Gemini Native' : 'Universal AI'} ({aiSettings.modelName})
+                  AI 引擎: 后端统一配置 (Gemini 2.0 Flash)
                 </span>
               </div>
 
@@ -206,6 +220,7 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ isAnalyzing, cha
             </div>
           )}
           <div ref={chatEndRef} />
+          </div>
         </div>
       </div>
 

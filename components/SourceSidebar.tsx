@@ -133,9 +133,15 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     e.preventDefault();
     let finalContent = "";
     
+    // 检查资产名称
+    if (!assetName || !assetName.trim()) {
+      alert('⚠️ 请填写资产展示名称');
+      return;
+    }
+    
     if (assetType === SourceType.DATABASE) {
       if (connectionStatus !== 'success' || !fetchedMetadata) {
-        alert('请先测试连接并成功获取元数据后再提交');
+        alert('⚠️ 请先测试连接并成功获取元数据后再提交');
         return;
       }
       finalContent = fetchedMetadata;
@@ -143,11 +149,22 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
       finalContent = textContent;
     }
 
-    if (assetName && finalContent) {
-      onAddSource(assetType, assetName, finalContent);
-      resetAssetForm();
-      setShowAssetModal(false);
+    // 检查内容
+    if (!finalContent || !finalContent.trim()) {
+      alert('⚠️ 请提供资产内容或元数据');
+      return;
     }
+
+    // 提交资产
+    console.log('📦 正在接入资产:', { type: assetType, name: assetName, contentLength: finalContent.length });
+    onAddSource(assetType, assetName.trim(), finalContent);
+    
+    // 重置表单并关闭模态框
+    resetAssetForm();
+    setShowAssetModal(false);
+    
+    // 成功提示
+    alert(`✅ 资产 "${assetName.trim()}" 已成功接入！`);
   };
 
   const renderIcon = (type: SourceType) => {

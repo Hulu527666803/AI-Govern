@@ -39,13 +39,11 @@ const App: React.FC = () => {
   const [selectedSource, setSelectedSource] = useState<DataSource | null>(null);
   
   const [showSettings, setShowSettings] = useState(false);
-  const [aiSettings, setAiSettings] = useState<AISettings>(() => {
-    const saved = localStorage.getItem('uino_ai_settings');
-    return saved ? JSON.parse(saved) : {
-      engine: 'GEMINI_SDK',
-      baseUrl: 'https://api.openai.com/v1',
-      modelName: 'gemini-3-pro-preview'
-    };
+  // AI 配置现在由后端统一管理，前端只保留用于显示
+  const [aiSettings] = useState<AISettings>({
+    engine: 'BACKEND', // 标识使用后端配置
+    baseUrl: '',
+    modelName: '由后端配置'
   });
 
   const navigate = useNavigate();
@@ -60,8 +58,8 @@ const App: React.FC = () => {
   }, [theme]);
 
   const saveSettings = (newSettings: AISettings) => {
-    setAiSettings(newSettings);
-    localStorage.setItem('uino_ai_settings', JSON.stringify(newSettings));
+    // AI 配置现在由后端管理，前端设置已禁用
+    alert('⚠️ AI 配置现在由后端统一管理，请联系管理员修改 .env 配置文件');
     setShowSettings(false);
   };
 
@@ -91,7 +89,7 @@ const App: React.FC = () => {
 
   const handleAddDomain = (name: string, description: string) => {
     const newDomain: DataDomain = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `domain_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
       description,
       timestamp: Date.now()
@@ -99,6 +97,8 @@ const App: React.FC = () => {
     setDomains(prev => [...prev, newDomain]);
     setActiveDomainId(newDomain.id);
     setSelectedSource(null);
+    
+    console.log(`✅ 业务域 "${name}" 已创建，ID: ${newDomain.id}`);
   };
 
   const handleSelectDomain = (id: string) => {
@@ -107,7 +107,11 @@ const App: React.FC = () => {
   };
 
   const handleAddSource = (type: SourceType, name: string, content: string) => {
-    if (!activeDomainId) return;
+    if (!activeDomainId) {
+      alert('⚠️ 请先选择一个业务数据域');
+      return;
+    }
+    
     const newSource: DataSource = {
       id: Math.random().toString(36).substr(2, 9),
       domainId: activeDomainId,
@@ -117,6 +121,9 @@ const App: React.FC = () => {
       timestamp: Date.now()
     };
     setSources(prev => [...prev, newSource]);
+    
+    // 添加成功提示
+    console.log(`✅ 资产 "${name}" 已成功接入到域 "${activeDomain?.name}"`);
   };
 
   const handleStartGovernance = async (prompt: string) => {
