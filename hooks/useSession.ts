@@ -39,6 +39,17 @@ interface SessionContext {
  * Session 管理 Hook
  * 管理会话ID、会话列表和上下文历史
  */
+export const useDomain = () => {
+  const [activeDomainName, setActiveDomainName] = useState<string>('');
+  
+  useEffect(() => {
+    const stored = localStorage.getItem('active_domain_name');
+    if (stored) setActiveDomainName(stored);
+  }, []);
+
+  return { activeDomainName };
+};
+
 export const useSession = () => {
   const [sessionId, setSessionId] = useState<string>('');
   const [currentSession, setCurrentSession] = useState<SessionInfo | null>(null);

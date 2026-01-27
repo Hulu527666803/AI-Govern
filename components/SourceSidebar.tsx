@@ -1,6 +1,6 @@
 
-import React, { useState, useRef } from 'react';
-import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown, MessageSquare, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { SourceType, DataSource, DataDomain } from '../types';
 import { testDatabaseConnection, getDatabaseMetadata, formatMetadata, DATABASE_TYPES } from '../services/databaseService';
 
@@ -9,6 +9,7 @@ interface SourceSidebarProps {
   sources: DataSource[];
   activeDomainId: string | null;
   onAddDomain: (name: string, description: string) => void;
+  onDeleteDomain?: (id: string) => void;
   onSelectDomain: (id: string) => void;
   onAddSource: (type: SourceType, name: string, content: string) => void;
   onSelectSource: (source: DataSource | null) => void;
@@ -23,6 +24,7 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
   sources, 
   activeDomainId,
   onAddDomain,
+  onDeleteDomain,
   onSelectDomain,
   onAddSource, 
   onSelectSource,
@@ -33,7 +35,7 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [domainName, setDomainName] = useState('');
   const [domainDesc, setDomainDesc] = useState('');
-
+  
   const [assetType, setAssetType] = useState<SourceType>(SourceType.DDL);
   const [inputMode, setInputMode] = useState<InputMode>('TEXT');
   const [assetName, setAssetName] = useState('');
@@ -201,15 +203,26 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
               <button
                 key={domain.id}
                 onClick={() => onSelectDomain(domain.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center gap-3 border ${
+                className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center gap-3 border group ${
                   activeDomainId === domain.id 
                     ? (isDark ? 'bg-[#177ddc]/20 border-[#177ddc]/50 text-white' : 'bg-blue-50 border-blue-200 text-blue-600') 
                     : (isDark ? 'hover:bg-[#1d1d1d] border-transparent text-slate-400' : 'hover:bg-gray-50 border-transparent text-slate-600')
                 }`}
               >
                 <Folder size={16} className={activeDomainId === domain.id ? (isDark ? 'text-blue-400' : 'text-blue-500') : 'text-slate-400'} />
-                <span className="text-xs font-bold truncate">{domain.name}</span>
-                {activeDomainId === domain.id && <ChevronRight size={12} className="ml-auto opacity-70" />}
+                <span className="text-xs font-bold truncate flex-1">{domain.name}</span>
+                <div className="flex items-center gap-1">
+                  {activeDomainId === domain.id && <ChevronRight size={12} className="opacity-70" />}
+                  {onDeleteDomain && (
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); onDeleteDomain(domain.id); }}
+                      className={`p-1 rounded transition-all opacity-0 group-hover:opacity-100 ${isDark ? 'hover:bg-red-500/20 hover:text-red-400' : 'hover:bg-red-50 hover:text-red-500'}`}
+                      title="删除业务域"
+                    >
+                      <Trash2 size={12} />
+                    </div>
+                  )}
+                </div>
               </button>
             ))
           )}

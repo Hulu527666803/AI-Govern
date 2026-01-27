@@ -20,6 +20,27 @@ function getSessionId(): string {
 }
 
 /**
+ * 获取 API Base URL
+ */
+function getBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+/**
+ * 获取当前 Token
+ */
+function getToken(): string | null {
+  return localStorage.getItem('ai_governance_token');
+}
+
+/**
+ * 设置当前 Token
+ */
+function setToken(token: string): void {
+  localStorage.setItem('ai_governance_token', token);
+}
+
+/**
  * 通用请求方法
  */
 async function request<T = any>(
@@ -27,11 +48,16 @@ async function request<T = any>(
   options: RequestInit = {}
 ): Promise<T> {
   const sessionId = getSessionId();
+  const token = getToken();
   
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-session-id': sessionId
   };
+
+  if (token) {
+    defaultHeaders['x-token'] = token;
+  }
 
   const config: RequestInit = {
     ...options,
@@ -110,7 +136,10 @@ export const httpClient = {
   post,
   put,
   delete: del,
-  getSessionId
+  getSessionId,
+  getBaseUrl,
+  getToken,
+  setToken
 };
 
 export default httpClient;

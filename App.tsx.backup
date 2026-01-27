@@ -5,8 +5,7 @@ import { SourceSidebar } from './components/SourceSidebar';
 import { AnalysisCenter } from './components/AnalysisCenter';
 import { GovernanceStudio } from './components/GovernanceStudio';
 import { DataSource, DataDomain, GovernanceResult, SourceType, AISettings, AIEngineType, Session } from './types';
-import { performGovernanceAnalysis, performGovernanceAnalysisStream } from './services/aiService';
-import { InterruptConfirmModal } from './components/InterruptConfirmModal'; // ✅ Phase 3
+import { performGovernanceAnalysis } from './services/aiService';
 import { domainService } from './services/domainService';
 import { sourceService } from './services/sourceService';
 import { sessionService } from './services/sessionService';
@@ -84,15 +83,6 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai'; text: string; result?: GovernanceResult }[]>([]);
   const [selectedSource, setSelectedSource] = useState<DataSource | null>(null);
-  
-  // ✅ Phase 3: 中断状态管理
-  const [interruptState, setInterruptState] = useState<{
-    isInterrupted: boolean;
-    type?: string;
-    message?: string;
-    data?: any;
-    sessionId?: string;
-  } | null>(null);
   
   // 🔧 会话级别的状态存储：每个会话维护自己的聊天历史和分析状态
   const [sessionStates, setSessionStates] = useState<{
@@ -494,85 +484,20 @@ const App: React.FC = () => {
 
     try {
       const sourceContext = activeDomainSources.map(s => `[资产类型: ${s.type}, 资产名称: ${s.name}]\n资产内容: ${s.content}`).join('\n\n');
+      const result = await performGovernanceAnalysis(sourceContext, prompt, aiSettings);
       
-      // 🚀 使用流式 SSE API
-      await performGovernanceAnalysisStream(
-        sourceContext,
-        prompt,
-        aiSettings,
-        // onThinkingStep
-        (step) => {
-          console.log('📝 收到思维步骤:', step);
-          setChatHistory(prev => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === 'ai' && (last as any).isStreaming) {
-              // 更新最后一条流式消息
-              return [...prev.slice(0, -1), {
-                ...last,
-                thinkingSteps: [...((last as any).thinkingSteps || []), step]
-              }];
-            } else {
-              // 创建新的流式消息
-              return [...prev, {
-                role: 'ai' as const,
-                text: '正在分析中...',
-                isStreaming: true,
-                thinkingSteps: [step]
-              } as any];
-            }
-          });
-        },
-        // onProgress
-        (progress) => {
-          console.log('📊 进度更新:', progress);
-        },
-        // onComplete
-        (result) => {
-          console.log('✅ 分析完成:', result);
-          setGovernanceResult(result);
-          setIsAnalyzing(false);
-          
-          const modelName = result.modelUsed || aiSettings.modelName;
-          
-          setChatHistory(prev => {
-            const last = prev[prev.length - 1];
-            if (last && (last as any).isStreaming) {
-              // 替换流式消息为最终结果
-              return [...prev.slice(0, -1), {
-                role: 'ai' as const,
-                text: `分析已完成。模型使用 [${modelName}] 完成了建模推演。`,
-                result: result,
-                isStreaming: false
-              } as any];
-            }
-            return [...prev, {
-              role: 'ai' as const,
-              text: `分析已完成。模型使用 [${modelName}] 完成了建模推演。`,
-              result: result
-            }];
-          });
-        },
-        // onError
-        (error) => {
-          console.error('❌ 分析失败:', error);
-          setIsAnalyzing(false);
-          setChatHistory(prev => [...prev, { 
-            role: 'ai', 
-            text: `分析出错: ${error.message || "请求失败"}` 
-          }]);
-        },
-        // ✅ Phase 3: onInterrupt
-        (interruptData) => {
-          console.log('⏸️  AI 请求用户确认:', interruptData);
-          setInterruptState({
-            isInterrupted: true,
-            type: interruptData.type,
-            message: interruptData.message,
-            data: interruptData.data,
-            sessionId: currentSessionId,
-          });
-        }
-      );
+      setGovernanceResult(result);
+      
+      // 先结束分析状态，避免 ThinkingLog 重叠显示
+      setIsAnalyzing(false);
+      
+      const modelName = result.modelUsed || aiSettings.modelName;
+
+      setChatHistory(prev => [...prev, { 
+        role: 'ai', 
+        text: `分析已完成。模型使用 [${modelName}] 完成了建模推演。`,
+        result: result 
+      }]);
     } catch (error: any) {
       console.error(error);
       setIsAnalyzing(false);
@@ -733,38 +658,6 @@ const App: React.FC = () => {
           </>
         )}
       </main>
-
-      {/* ✅ Phase 3: Interrupt Confirm Modal */}
-      {interruptState?.isInterrupted && (
-        <InterruptConfirmModal
-          type={interruptState.type!}
-          message={interruptState.message!}
-          data={interruptState.data!}
-          onConfirm={async () => {
-            if (!interruptState.sessionId) return;
-            try {
-              await httpClient.post('/ai/resume', { sessionId: interruptState.sessionId });
-              setInterruptState(null);
-            } catch (error) {
-              console.error('恢复执行失败:', error);
-            }
-          }}
-          onModify={async (modifiedObjects) => {
-            if (!interruptState.sessionId) return;
-            try {
-              await httpClient.post('/ai/update-and-resume', {
-                sessionId: interruptState.sessionId,
-                modifiedObjects: modifiedObjects,
-              });
-              setInterruptState(null);
-            } catch (error) {
-              console.error('修改并恢复失败:', error);
-            }
-          }}
-          onCancel={() => setInterruptState(null)}
-          theme={theme}
-        />
-      )}
 
       {/* Settings Modal */}
       {showSettings && (

@@ -83,6 +83,7 @@ export interface GovernanceResult {
   knowledge: BusinessKnowledge[];
   sampleData: SampleData[];
   summary: string;
+  modelUsed?: string;
 }
 
 export type AIEngineType = 'GEMINI_SDK' | 'OPENAI_COMPATIBLE';
@@ -92,4 +93,26 @@ export interface AISettings {
   baseUrl: string;
   modelName: string;
   apiKey?: string;
+}
+
+export interface Session {
+  sessionId: string;
+  userId: string;
+  domainId: string;
+  domainName: string;
+  createdAt: string;
+  lastActivity: string;
+  status: string;
+  metadata: any;
+}
+
+export interface ContextHistoryItem {
+  id: number;
+  taskType: string;
+  taskDescription: string;
+  inputData: any;
+  outputData: any;
+  modelUsed: string;
+  timestamp: string;
+  contextSnapshot: any;
 }

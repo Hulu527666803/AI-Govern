@@ -1,22 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Trash2, History, ChevronDown, ChevronRight, FileText, Sparkles } from 'lucide-react';
-import { useSession } from '../hooks/useSession';
+import { httpClient } from '../services/httpClient';
+import { ContextHistoryItem } from '../types';
 
 interface ContextPanelProps {
   theme?: 'light' | 'dark';
+  sessionId?: string | null;
+  lastUpdated?: number;
 }
 
-export const ContextPanel: React.FC<ContextPanelProps> = ({ theme = 'dark' }) => {
-  const { sessionId, contextHistory, isLoading, loadContextHistory, clearContext } = useSession();
+export const ContextPanel: React.FC<ContextPanelProps> = ({ theme = 'dark', sessionId, lastUpdated }) => {
+  const [contextHistory, setContextHistory] = useState<ContextHistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const isDark = theme === 'dark';
 
+  const loadContextHistory = async () => {
+    if (!sessionId) return;
+    
+    setIsLoading(true);
+    try {
+      const result = await httpClient.get<{ success: boolean; data: { taskHistory: ContextHistoryItem[] } }>(`/context/session/${sessionId}`);
+      if (result.success && result.data) {
+        setContextHistory(result.data.taskHistory || []);
+      }
+    } catch (error) {
+      console.error('加载上下文历史失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearContext = async () => {
+    if (!sessionId) return;
+    
+    try {
+      await httpClient.delete(`/context/session/${sessionId}`);
+      setContextHistory([]);
+    } catch (error) {
+      console.error('清除上下文失败:', error);
+    }
+  };
+
+  // 问题1修复：切换会话时立即加载历史，无论是否展开
   useEffect(() => {
-    if (isExpanded && sessionId) {
+    if (sessionId) {
+      loadContextHistory();
+      setIsExpanded(true); // 自动展开以显示历史
+    } else {
+      setContextHistory([]);
+      setIsExpanded(false);
+    }
+  }, [sessionId]);
+  
+  // 监听 lastUpdated 变化以刷新数据
+  useEffect(() => {
+    if (sessionId && lastUpdated) {
       loadContextHistory();
     }
-  }, [isExpanded, sessionId, loadContextHistory]);
+  }, [lastUpdated]);
 
   const toggleItemExpand = (id: number) => {
     setExpandedItems(prev => {
@@ -31,10 +74,8 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({ theme = 'dark' }) =>
   };
 
   const handleClearContext = async () => {
-    if (window.confirm('确定要清除所有上下文历史吗？这将开始一个新的会话。')) {
-      await clearContext();
-      setIsExpanded(false);
-    }
+    await clearContext();
+    setIsExpanded(false);
   };
 
   const formatTimestamp = (timestamp: string) => {
