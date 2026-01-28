@@ -5,8 +5,8 @@ import { ICONS } from '../constants';
 import { useDomain } from '../hooks/useSession';
 
 // 导入拆分后的模块
-import { GovernanceStudioProps, TabType, ExportType, PublishStep, FieldChanges, GovernedObject } from './governance/types';
-import { analyzeFieldChanges } from './governance/utils';
+import { GovernanceStudioProps, TabType, ExportType, PublishStep, FieldChanges, ExtendedFieldChanges, GovernedObject } from './governance/types';
+import { analyzeFieldChanges, analyzeExtendedFieldChanges } from './governance/utils';
 import { generateDataStructureDoc, generateRelationshipDoc, generateGovernanceDoc } from './governance/documentGenerators';
 import { renderD3Graph } from './governance/D3GraphRenderer';
 import { PublishModal } from './governance/PublishModal';
@@ -37,9 +37,10 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
   const [sessionId, setSessionId] = useState<string>('');
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const contentEndRef = useRef<HTMLDivElement>(null); // 用于自动滚动到卡片底部
   const isDark = theme === 'dark';
 
-  const fieldChanges = analyzeFieldChanges(selectedSource, result);
+  const fieldChanges = analyzeExtendedFieldChanges(selectedSource, result);
 
   useEffect(() => {
     if (showGraph && result) {
@@ -56,6 +57,15 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
       setSessionId(currentSessionId);
     }
   }, []);
+
+  // 自动滚动到卡片底部（当对象列表更新时）
+  useEffect(() => {
+    if (result?.objects && activeTab === 'ONTOLOGY' && !showGraph) {
+      setTimeout(() => {
+        contentEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [result?.objects?.length, activeTab, showGraph]);
 
   const handlePublishClick = () => {
     setIsPublishModalOpen(true);
@@ -330,6 +340,8 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
                           isDark={isDark}
                         />
                         ))}
+                        {/* 滚动锚点 */}
+                        <div ref={contentEndRef} />
                       </div>
                     )}
                   </div>

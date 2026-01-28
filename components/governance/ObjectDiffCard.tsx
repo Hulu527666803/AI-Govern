@@ -30,9 +30,9 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
       case 'REMOVED':
         return <Minus className="w-4 h-4 text-red-500" />;
       case 'RENAMED':
-        return <RefreshCw className="w-4 h-4 text-amber-500" />;
+        return <RefreshCw className="w-4 h-4 text-yellow-500" />;
       case 'MODIFIED':
-        return <Edit className="w-4 h-4 text-blue-500" />;
+        return <Edit className="w-4 h-4 text-yellow-500" />;
       default:
         return null;
     }
@@ -53,16 +53,21 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
           : 'bg-red-50 text-red-700 border-red-200';
       case 'RENAMED':
         return isDark 
-          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-          : 'bg-amber-50 text-amber-700 border-amber-200';
+          ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' 
+          : 'bg-yellow-50 text-yellow-700 border-yellow-200';
       case 'MODIFIED':
         return isDark 
-          ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' 
-          : 'bg-blue-50 text-blue-700 border-blue-200';
+          ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' 
+          : 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'UNCHANGED':
+        // 无变化：灰色
+        return isDark 
+          ? 'bg-gray-800/20 text-slate-400 border-gray-600/30' 
+          : 'bg-gray-100 text-slate-600 border-gray-300';
       default:
         return isDark 
-          ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' 
-          : 'bg-gray-50 text-gray-600 border-gray-200';
+          ? 'bg-[#1d1d1d] text-slate-300 border-[#303030]' 
+          : 'bg-white text-slate-700 border-gray-200';
     }
   };
 
@@ -78,7 +83,7 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
       case 'REMOVED':
         return isDark ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-red-600';
       case 'MODIFIED':
-        return isDark ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-blue-600';
+        return isDark ? 'border-l-4 border-l-yellow-500' : 'border-l-4 border-l-yellow-600';
       default:
         return '';
     }
@@ -137,13 +142,13 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
                 </span>
               )}
               {changeStats.renamed > 0 && (
-                <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" />
                   {changeStats.renamed}
                 </span>
               )}
               {changeStats.modified > 0 && (
-                <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
                   <Edit className="w-3 h-3" />
                   {changeStats.modified}
                 </span>
@@ -164,16 +169,27 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
       {expanded && (
         <div className={`px-5 pb-5 space-y-2 border-t ${isDark ? 'border-[#303030]' : 'border-gray-100'} pt-4`}>
           {object.attributes && object.attributes.length > 0 ? (
-            object.attributes.map((attr, idx) => (
-              <div
-                key={idx}
-                className={`p-4 rounded-lg border transition-all ${getStatusColor(attr.status)}`}
-              >
-                <div className="flex items-start gap-3">
-                  {/* 状态图标 */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    {getStatusIcon(attr.status)}
-                  </div>
+            object.attributes.map((attr, idx) => {
+              // ✅ 判断是否为初始创建（不显示变更标记）
+              const isInitialCreation = 
+                attr.status === 'ADDED' && 
+                attr.reason?.includes('Initial object creation');
+              
+              // 如果是初始创建，清除 status 避免显示绿色边框和图标
+              const displayStatus = isInitialCreation ? undefined : attr.status;
+              
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-lg border transition-all ${getStatusColor(displayStatus)}`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* 状态图标 */}
+                    {displayStatus && (
+                      <div className="flex-shrink-0 mt-0.5">
+                        {getStatusIcon(displayStatus)}
+                      </div>
+                    )}
 
                   <div className="flex-1 min-w-0">
                     {/* 字段名（支持 RENAMED 显示） */}
@@ -211,7 +227,8 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
                             {attr.businessName}
                           </p>
                         )}
-                        {attr.description && (
+                        {/* ✅ 修复：只有当 description 与 businessName 不同时才显示 */}
+                        {attr.description && attr.description !== attr.businessName && (
                           <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                             {attr.description}
                           </p>
@@ -219,8 +236,11 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
                       </div>
                     )}
 
-                    {/* AI 解释原因（轻微展示：小字体斜体） */}
-                    {attr.reason && (
+                    {/* AI 解释原因（仅在有意义的变更时显示） */}
+                    {attr.reason && 
+                     attr.status && 
+                     attr.status !== 'UNCHANGED' && 
+                     !attr.reason.includes('Initial object creation') && (
                       <p className={`mt-2 text-xs italic opacity-60 ${
                         isDark ? 'text-slate-500' : 'text-slate-500'
                       }`}>
@@ -230,7 +250,8 @@ export const ObjectDiffCard: React.FC<ObjectDiffCardProps> = ({ object, isDark }
                   </div>
                 </div>
               </div>
-            ))
+              );
+            })
           ) : (
             <div className={`text-center py-6 text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
               该对象暂无属性

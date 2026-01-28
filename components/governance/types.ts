@@ -74,6 +74,24 @@ export interface FieldChanges {
   };
 }
 
+/**
+ * 扩展版字段变更（支持四种状态）
+ */
+export interface FieldChangeDetail {
+  name: string;
+  type?: string;
+  originalType?: string;
+}
+
+export interface ExtendedFieldChanges {
+  [objectId: string]: {
+    added: FieldChangeDetail[];      // 新增字段（绿色）
+    removed: FieldChangeDetail[];    // 删除字段（红色）
+    modified: FieldChangeDetail[];   // 更改字段（黄色）
+    unchanged: FieldChangeDetail[];  // 无变化字段（灰色）
+  };
+}
+
 export type TabType = 'ONTOLOGY' | 'GLOSSARY' | 'METRICS' | 'SAMPLES';
 export type ExportType = 'M3' | 'MYSQL' | 'DM';
 export type PublishStep = 'CONFIG' | 'PROGRESS' | 'RESULT';
