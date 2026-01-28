@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
-import { Layers, Network, FileSearch, Lightbulb, TableIcon, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle } from 'lucide-react';
+import { Layers, Network, FileSearch, Lightbulb, TableIcon, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle, Clock } from 'lucide-react';
 import { ICONS } from '../constants';
 import { useDomain } from '../hooks/useSession';
 
 // 导入拆分后的模块
-import { GovernanceStudioProps, TabType, ExportType, PublishStep, FieldChanges } from './governance/types';
+import { GovernanceStudioProps, TabType, ExportType, PublishStep, FieldChanges, GovernedObject } from './governance/types';
 import { analyzeFieldChanges } from './governance/utils';
 import { generateDataStructureDoc, generateRelationshipDoc, generateGovernanceDoc } from './governance/documentGenerators';
 import { renderD3Graph } from './governance/D3GraphRenderer';
 import { PublishModal } from './governance/PublishModal';
 import { ExportModal } from './governance/ExportModal';
+import { ObjectDiffCard } from './governance/ObjectDiffCard';
+import { TimelineViewer } from './TimelineViewer';
+import { httpClient } from '../services/httpClient';
 
 export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, theme = 'dark', selectedSource }) => {
   const [activeTab, setActiveTab] = useState<TabType>('ONTOLOGY');
@@ -29,6 +32,10 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportType, setExportType] = useState<ExportType>('M3');
 
+  // Timeline states
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
+
   const svgRef = useRef<SVGSVGElement>(null);
   const isDark = theme === 'dark';
 
@@ -41,6 +48,14 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
       }, 100);
     }
   }, [showGraph, result, theme]);
+
+  useEffect(() => {
+    // 获取当前 sessionId
+    const currentSessionId = httpClient.getSessionId();
+    if (currentSessionId) {
+      setSessionId(currentSessionId);
+    }
+  }, []);
 
   const handlePublishClick = () => {
     setIsPublishModalOpen(true);
@@ -188,6 +203,52 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
         </div>
       )}
 
+      {/* Action Bar */}
+      <div className={`px-5 py-3 border-b transition-colors ${isDark ? 'bg-[#141414]/60 border-[#303030]' : 'bg-gray-50 border-[#f0f0f0]'}`}>
+        <div className="flex items-center justify-between">
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            治理成果
+          </span>
+          <div className="flex gap-2">
+            {sessionId && (
+              <button
+                onClick={() => setIsTimelineOpen(true)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                  isDark 
+                    ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20' 
+                    : 'bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100'
+                }`}
+              >
+                <Clock size={12} />
+                时间旅行
+              </button>
+            )}
+            <button
+              onClick={handlePublishClick}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                isDark 
+                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20' 
+                  : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
+              }`}
+            >
+              <CloudUpload size={12} />
+              发布
+            </button>
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                isDark 
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20' 
+                  : 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100'
+              }`}
+            >
+              <Download size={12} />
+              导出
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className={`px-5 pt-5 border-b transition-colors ${isDark ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -263,67 +324,11 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
                     {expandedDomains[domain] !== false && (
                       <div className="space-y-4 pl-3">
                         {result.objects.filter(o => (o.domain || '通用业务域') === domain).map(obj => (
-                          <div key={obj.id} className={`border rounded-[24px] p-5 shadow-sm transition-all group ${isDark ? 'bg-[#1d1d1d] border-[#303030] hover:border-[#177ddc]/50' : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-md'}`}>
-                            <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <h4 className={`text-[13px] font-bold transition-colors ${isDark ? 'text-white group-hover:text-[#177ddc]' : 'text-slate-800 group-hover:text-blue-600'}`}>{obj.businessName}</h4>
-                                <p className={`text-[9px] font-mono mt-0.5 uppercase tracking-tighter font-semibold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>物理资产: {obj.name}</p>
-                              </div>
-                              <div className={`p-2 rounded-xl border transition-colors ${isDark ? 'bg-black text-[#177ddc] border-[#303030]' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                {ICONS.Object}
-                              </div>
-                            </div>
-                            <p className={`text-[11px] mb-5 leading-relaxed font-medium transition-colors ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{obj.description}</p>
-                            
-                            {obj.attributes && obj.attributes.length > 0 ? (
-                            <div className="space-y-1.5">
-                              {obj.attributes.map((attr, i) => {
-                                const isAdded = fieldChanges[obj.id]?.added?.includes(attr.name);
-                                const borderColor = isAdded 
-                                  ? (isDark ? 'border-green-500/50 bg-green-500/5' : 'border-green-400 bg-green-50')
-                                  : (isDark ? 'border-[#303030] bg-black/40' : 'border-gray-100 bg-gray-50');
-                                
-                                return (
-                                  <div key={attr.name || `attr-${obj.id}-${i}`} className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${borderColor}`}>
-                                    <span className={`text-[11px] font-mono font-bold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                                      {attr.name}
-                                    </span>
-                                    {isAdded && (
-                                      <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}>
-                                        AI新增
-                                      </span>
-                                    )}
-                                    <span className={`text-[11px] flex-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                                      {attr.description || attr.businessName || '-'}
-                                    </span>
-                                    <span className={`text-[9px] font-mono font-bold px-2 py-1 rounded-md whitespace-nowrap ${isDark ? 'text-[#177ddc] bg-blue-500/10' : 'text-blue-600 bg-blue-50'}`}>
-                                      {attr.type}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              
-                              {/* 显示被AI删除的字段 */}
-                              {fieldChanges[obj.id]?.removed?.map((removedField, i) => (
-                                <div key={`removed-${i}`} className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${isDark ? 'border-red-500/50 bg-red-500/5' : 'border-red-400 bg-red-50'}`}>
-                                  <span className={`text-[11px] font-mono font-bold line-through ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                    {removedField}
-                                  </span>
-                                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
-                                    AI删除
-                                  </span>
-                                  <span className={`text-[11px] flex-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                    该字段已被AI治理移除
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            ) : (
-                              <div className={`text-[11px] italic ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                                暂无属性信息
-                              </div>
-                            )}
-                          </div>
+                        <ObjectDiffCard 
+                          key={obj.id} 
+                          object={obj as any} 
+                          isDark={isDark}
+                        />
                         ))}
                       </div>
                     )}
@@ -496,6 +501,19 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
         onExportTypeChange={setExportType}
         onDownload={handleDownload}
       />
+
+      {/* Timeline Viewer */}
+      {isTimelineOpen && sessionId && (
+        <TimelineViewer
+          sessionId={sessionId}
+          isDark={isDark}
+          onClose={() => setIsTimelineOpen(false)}
+          onRestore={(restoredState) => {
+            console.log('版本已恢复:', restoredState);
+            alert('版本已恢复！请刷新页面查看。');
+          }}
+        />
+      )}
     </div>
   );
 };
