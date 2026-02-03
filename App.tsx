@@ -7,9 +7,11 @@ import { GovernanceStudio } from './components/GovernanceStudio';
 import { DataSource, DataDomain, GovernanceResult, SourceType, AISettings, AIEngineType, Session } from './types';
 import { performGovernanceAnalysis, performGovernanceAnalysisStream } from './services/aiService';
 import { InterruptConfirmModal } from './components/InterruptConfirmModal'; // ✅ Phase 3
+import { ConfirmModal } from './components/ConfirmModal'; // ✅ 通用确认弹窗
 import { domainService } from './services/domainService';
 import { sourceService } from './services/sourceService';
 import { sessionService } from './services/sessionService';
+import { contextService } from './services/contextService';  // ✅ 导入上下文服务
 import { httpClient } from './services/httpClient';
 import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Save, ShieldCheck, Zap, Key, Lock, Unlock } from 'lucide-react';
 
@@ -94,11 +96,28 @@ const App: React.FC = () => {
     sessionId?: string;
   } | null>(null);
   
-  // 🔧 会话级别的状态存储：每个会话维护自己的聊天历史和分析状态
+  // ✅ 确认弹窗状态管理
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'warning' | 'error' | 'info' | 'confirm';
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    showCancel: false,
+  });
+  
+  // 🔧 会话级别的状态存储：每个会话维护自己的聊天历史、分析状态和治理结果
   const [sessionStates, setSessionStates] = useState<{
     [sessionId: string]: {
       chatHistory: { role: 'user' | 'ai'; text: string; result?: GovernanceResult }[];
       isAnalyzing: boolean;
+      governanceResult?: GovernanceResult | null;
     }
   }>({});
   
@@ -120,6 +139,60 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.className = theme;
   }, [theme]);
+
+  // 🐛 调试工具：将调试函数挂载到全局
+  useEffect(() => {
+    (window as any).debugSource = async (sourceId: string) => {
+      try {
+        const debugInfo = await sourceService.getSourceDebugInfo(sourceId);
+        console.group('📊 资产调试信息');
+        console.log('ID:', debugInfo.id);
+        console.log('名称:', debugInfo.name);
+        console.log('类型:', debugInfo.type);
+        console.log('域ID:', debugInfo.domainId);
+        console.log('内容长度:', debugInfo.contentLength, '字符');
+        console.log('内容哈希:', debugInfo.contentHash);
+        console.log('内容预览 (前500字符):');
+        console.log(debugInfo.contentPreview);
+        console.groupEnd();
+        return debugInfo;
+      } catch (error) {
+        console.error('❌ 获取资产详情失败:', error);
+      }
+    };
+
+    (window as any).debugAllSources = () => {
+      console.group('📦 当前所有资产');
+      console.log('总数:', sources.length);
+      sources.forEach((s, idx) => {
+        console.log(`${idx + 1}. [${s.type}] ${s.name} (ID: ${s.id})`);
+        console.log('   内容长度:', s.content.length, '字符');
+        console.log('   内容预览:', s.content.substring(0, 100));
+      });
+      console.groupEnd();
+    };
+
+    (window as any).debugSelectedSource = () => {
+      if (!selectedSource) {
+        console.log('❌ 当前没有选中的资产');
+        return;
+      }
+      console.group('🎯 当前选中的资产');
+      console.log('ID:', selectedSource.id);
+      console.log('名称:', selectedSource.name);
+      console.log('类型:', selectedSource.type);
+      console.log('内容长度:', selectedSource.content.length, '字符');
+      console.log('内容预览 (前500字符):');
+      console.log(selectedSource.content.substring(0, 500));
+      console.groupEnd();
+      return selectedSource;
+    };
+
+    console.log('🔧 调试工具已加载。可用命令:');
+    console.log('  - window.debugSource(sourceId) - 查看指定资产的详细信息');
+    console.log('  - window.debugAllSources() - 查看所有资产列表');
+    console.log('  - window.debugSelectedSource() - 查看当前选中的资产');
+  }, [sources, selectedSource]);
 
   // Token 变化时加载数据
   useEffect(() => {
@@ -182,10 +255,34 @@ const App: React.FC = () => {
     httpClient.setToken(''); // 清除本地存储的 Token
   };
 
+  // 弹窗辅助函数
+  const showModal = (
+    type: 'success' | 'warning' | 'error' | 'info' | 'confirm',
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    showCancel: boolean = false
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      onConfirm,
+      showCancel,
+    });
+  };
+
+  const closeModal = () => {
+    setConfirmModal({ ...confirmModal, isOpen: false });
+  };
+
   const saveSettings = (newSettings: AISettings) => {
     // AI 配置现在由后端管理，前端设置已禁用
-    alert('⚠️ AI 配置现在由后端统一管理，请联系管理员修改 .env 配置文件');
-    setShowSettings(false);
+    showModal('warning', 'AI 配置', 'AI 配置现在由后端统一管理，请联系管理员修改 .env 配置文件', () => {
+      setShowSettings(false);
+      closeModal();
+    }, false);
   };
 
   const navItems = [
@@ -214,7 +311,7 @@ const App: React.FC = () => {
 
   const handleAddDomain = async (name: string, description: string) => {
     if (!token) {
-      alert('请先输入 Token');
+      showModal('warning', '输入错误', '请先输入 Token', undefined, false);
       return;
     }
     try {
@@ -226,25 +323,28 @@ const App: React.FC = () => {
       console.log(`✅ 业务域 "${name}" 已创建，ID: ${newDomain.id}`);
     } catch (error) {
       console.error('创建业务域失败:', error);
-      alert('创建业务域失败');
+      showModal('error', '创建失败', '创建业务域失败，请稍后重试', undefined, false);
     }
   };
 
   const handleDeleteDomain = async (id: string) => {
-    if (window.confirm('确定要删除该业务域吗？这将同时删除该域下的所有会话和历史记录。')) {
+    showModal('warning', '确认删除业务域', '确定要删除该业务域吗？这将同时删除该域下的所有会话和历史记录。', async () => {
       try {
         await domainService.deleteDomain(id);
         setDomains(prev => prev.filter(d => d.id !== id));
         if (activeDomainId === id) {
           setActiveDomainId(null);
           setActiveSessionId(null);
-    setSelectedSource(null);
+          setSelectedSource(null);
         }
+        closeModal();
+        showModal('success', '删除成功', '业务域已成功删除', undefined, false);
       } catch (error) {
         console.error('删除业务域失败:', error);
-        alert('删除业务域失败');
+        closeModal();
+        showModal('error', '删除失败', '删除业务域失败，请稍后重试', undefined, false);
       }
-    }
+    }, true);
   };
 
   const handleSelectDomain = (id: string) => {
@@ -257,6 +357,7 @@ const App: React.FC = () => {
     setActiveSessionId(null); // 切换域时重置会话
     setSelectedSource(null); 
     setChatHistory([]); // 清空历史记录
+    setGovernanceResult(null); // ✅ 清空治理结果
     setIsAnalyzing(false); // 停止分析
     localStorage.removeItem('ai_governance_session_id'); // 清除本地存储的会话ID
   };
@@ -265,12 +366,13 @@ const App: React.FC = () => {
   const saveCurrentSessionState = (sessionId: string | null) => {
     if (!sessionId) return;
     
-    console.log('💾 保存会话状态:', sessionId, '历史记录数:', chatHistory.length, '是否分析中:', isAnalyzing);
+    console.log('💾 保存会话状态:', sessionId, '历史记录数:', chatHistory.length, '是否分析中:', isAnalyzing, '治理结果:', governanceResult ? '有' : '无');
     setSessionStates(prev => ({
       ...prev,
       [sessionId]: {
         chatHistory: [...chatHistory],
-        isAnalyzing: isAnalyzing
+        isAnalyzing: isAnalyzing,
+        governanceResult: governanceResult  // 保存治理结果
       }
     }));
   };
@@ -279,9 +381,10 @@ const App: React.FC = () => {
   const restoreSessionState = (sessionId: string) => {
     const savedState = sessionStates[sessionId];
     if (savedState) {
-      console.log('📂 恢复会话状态:', sessionId, '历史记录数:', savedState.chatHistory.length, '是否分析中:', savedState.isAnalyzing);
+      console.log('📂 恢复会话状态:', sessionId, '历史记录数:', savedState.chatHistory.length, '是否分析中:', savedState.isAnalyzing, '治理结果:', savedState.governanceResult ? '有' : '无');
       setChatHistory(savedState.chatHistory);
       setIsAnalyzing(savedState.isAnalyzing);
+      setGovernanceResult(savedState.governanceResult || null);  // 恢复治理结果
       return true;
     }
     return false;
@@ -317,7 +420,7 @@ const App: React.FC = () => {
         // 后端返回的是最新的在前（DESC），需要反转为最旧的在前
         const sortedTasks = [...taskHistory].reverse();
         
-        const history = sortedTasks.flatMap((task: any) => {
+        const history = sortedTasks.flatMap((task: any, taskIdx: number) => {
           const messages = [];
           
           // 用户消息
@@ -332,6 +435,20 @@ const App: React.FC = () => {
           if (task.outputData) {
             const modelUsed = task.outputData.modelUsed || task.modelUsed || 'AI';
             const summary = task.outputData.summary || `分析已完成。模型使用 [${modelUsed}] 完成了建模推演。`;
+            
+            // 🔍 添加日志：检查thinkingSteps是否存在
+            console.log(`📋 任务 ${taskIdx + 1} outputData:`, {
+              hasThinkingSteps: !!task.outputData.thinkingSteps,
+              thinkingStepsCount: task.outputData.thinkingSteps?.length || 0,
+              thinkingStepsPreview: task.outputData.thinkingSteps?.slice(0, 3).map((s: any) => ({
+                phase: s.phase,
+                title: s.title
+              })) || [],
+              objects: task.outputData.objects?.length || 0,
+              relationships: task.outputData.relationships?.length || 0,
+              terms: task.outputData.terms?.length || 0
+            });
+            
             messages.push({ 
               role: 'ai' as const, 
               text: summary,
@@ -344,12 +461,26 @@ const App: React.FC = () => {
         
         console.log('✅ 会话历史加载完成:', history.length, '条消息');
         
+        // 🔍 添加日志：检查恢复的历史记录中的thinkingSteps
+        const aiMessages = history.filter((msg: any) => msg.role === 'ai');
+        console.log('🔍 AI消息统计:', {
+          aiMessagesCount: aiMessages.length,
+          messagesWithThinkingSteps: aiMessages.filter((msg: any) => msg.result?.thinkingSteps?.length > 0).length,
+          totalThinkingSteps: aiMessages.reduce((sum: number, msg: any) => sum + (msg.result?.thinkingSteps?.length || 0), 0),
+          firstAiMessage: aiMessages[0] ? {
+            hasResult: !!aiMessages[0].result,
+            hasThinkingSteps: !!aiMessages[0].result?.thinkingSteps,
+            thinkingStepsCount: aiMessages[0].result?.thinkingSteps?.length || 0
+          } : null
+        });
+        
         // 🔧 如果前端有未保存的分析中内容，合并它们
         const savedState = sessionStates[sessionId];
         if (savedState && savedState.chatHistory.length > history.length) {
           console.log('🔀 合并前端未保存的内容');
           setChatHistory(savedState.chatHistory);
         } else {
+          console.log('📝 设置会话历史到chatHistory');
           setChatHistory(history);
           setIsAnalyzing(false); // 后端已完成，不再分析中
         }
@@ -382,6 +513,82 @@ const App: React.FC = () => {
     setActiveSessionId(id);
     localStorage.setItem('ai_governance_session_id', id);
     
+    // ✅ 加载会话详情，恢复资产和数据域选择
+    try {
+      const sessionDetail = await sessionService.getSession(id);
+      
+      // ✅ 恢复数据域选择（如果会话属于不同的域）
+      if (sessionDetail.domainId && sessionDetail.domainId !== activeDomainId) {
+        console.log('🔄 恢复数据域选择:', activeDomainId, '->', sessionDetail.domainId);
+        setActiveDomainId(sessionDetail.domainId);
+        
+        // 加载该域的资产列表和会话列表
+        const [domainSources, domainSessions] = await Promise.all([
+          sourceService.getDomainSources(sessionDetail.domainId),
+          sessionService.getUserSessions(sessionDetail.domainId)
+        ]);
+        setSources(domainSources);
+        setSessions(domainSessions);
+        console.log('✅ 已切换到域:', sessionDetail.domainId, `(${domainSources.length} 个资产, ${domainSessions.length} 个会话)`);
+      }
+      
+      // ✅ 恢复资产选择
+      if (sessionDetail.sourceId) {
+        console.log('🔄 恢复资产选择:', sessionDetail.sourceId);
+        const source = sources.find(s => s.id === sessionDetail.sourceId);
+        if (source) {
+          setSelectedSource(source);
+        } else {
+          // 如果当前 sources 中没有，尝试重新加载
+          const domainSources = await sourceService.getDomainSources(sessionDetail.domainId);
+          const matchedSource = domainSources.find(s => s.id === sessionDetail.sourceId);
+          if (matchedSource) {
+            setSelectedSource(matchedSource);
+          }
+        }
+      }
+      
+      // ✅ 恢复治理结果（从会话历史中提取最后一次的治理结果）
+      console.log('🔍 尝试恢复会话治理结果:', id);
+      const history = await contextService.getSessionContext(id);
+      
+      if (history?.taskHistory && history.taskHistory.length > 0) {
+        console.log('📚 找到会话历史:', history.taskHistory.length, '条记录');
+        
+        // 倒序查找最后一个有效的治理结果
+        let foundResult = false;
+        for (let i = history.taskHistory.length - 1; i >= 0; i--) {
+          const task = history.taskHistory[i];
+          if (task.outputData && (
+            task.outputData.objects?.length > 0 ||
+            task.outputData.relationships?.length > 0 ||
+            task.outputData.terms?.length > 0 ||
+            task.outputData.knowledge?.length > 0
+          )) {
+            console.log('✅ 恢复治理结果 (记录', i + 1, '):', {
+              objects: task.outputData.objects?.length || 0,
+              relationships: task.outputData.relationships?.length || 0,
+              terms: task.outputData.terms?.length || 0,
+              knowledge: task.outputData.knowledge?.length || 0
+            });
+            setGovernanceResult(task.outputData);
+            foundResult = true;
+            break;
+          }
+        }
+        
+        if (!foundResult) {
+          console.warn('⚠️ 未找到有效的治理结果');
+          setGovernanceResult(null);
+        }
+      } else {
+        console.log('ℹ️ 该会话暂无历史记录');
+        setGovernanceResult(null);
+      }
+    } catch (error) {
+      console.error('加载会话详情失败:', error);
+    }
+    
     // 加载新会话的历史（会尝试从前端状态恢复）
     await loadSessionHistory(id);
   };
@@ -405,7 +612,13 @@ const App: React.FC = () => {
 
     setIsCreatingSession(true);
     try {
-      const sessionId = await sessionService.createSession(domain.id, domain.name);
+      // ✅ 传递当前选中的资产信息
+      const sessionId = await sessionService.createSession(
+        domain.id, 
+        domain.name,
+        selectedSource?.id,
+        selectedSource?.name
+      );
       const newSessions = await sessionService.getUserSessions(domain.id);
       setSessions(newSessions);
       setActiveSessionId(sessionId);
@@ -418,7 +631,7 @@ const App: React.FC = () => {
       return sessionId;
     } catch (error) {
       console.error('创建会话失败:', error);
-      alert('创建会话失败');
+      showModal('error', '创建失败', '创建会话失败，请稍后重试', undefined, false);
       return null;
     } finally {
       setIsCreatingSession(false);
@@ -426,7 +639,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
-    if (window.confirm('确定要删除该会话吗？')) {
+    showModal('warning', '确认删除会话', '确定要删除该会话吗？删除后将无法恢复。', async () => {
       try {
         await sessionService.deleteSession(sessionId);
         setSessions(prev => prev.filter(s => s.sessionId !== sessionId));
@@ -443,16 +656,18 @@ const App: React.FC = () => {
           setChatHistory([]);
           setIsAnalyzing(false);
         }
+        closeModal();
+        showModal('success', '删除成功', '会话已成功删除', undefined, false);
       } catch (error) {
         console.error('删除会话失败:', error);
-        alert('删除会话失败');
+        closeModal();
+        showModal('error', '删除失败', '删除会话失败，请稍后重试', undefined, false);
       }
-    }
+    }, true);
   };
 
   const handleAddSource = async (type: SourceType, name: string, content: string) => {
     if (!activeDomainId) {
-      alert('⚠️ 请先选择一个业务数据域');
       return;
     }
     
@@ -460,11 +675,50 @@ const App: React.FC = () => {
       const newSource = await sourceService.createSource(activeDomainId, name, type, content);
       setSources(prev => [newSource, ...prev]);
       
+      // ✅ 自动切换到新接入的资产
+      setSelectedSource(newSource);
+      console.log(`🔄 自动切换到新接入的资产: ${name}`);
+      console.log(`📊 资产内容长度: ${content.length} 字符`);
+      console.log(`📄 资产内容预览: ${content.substring(0, 200)}`);
+      
+      // 清空当前会话和历史（切换资产时的标准操作）
+      setActiveSessionId(null);
+      setChatHistory([]);
+      setGovernanceResult(null);
+      setIsAnalyzing(false);
+      localStorage.removeItem('ai_governance_session_id');
+      
       // 添加成功提示
       console.log(`✅ 资产 "${name}" 已成功接入到域 "${activeDomain?.name}"`);
+      
+      // 🔧 优化：显示友好的用户提示
+      setChatHistory(prev => [...prev, { 
+        role: 'ai', 
+        text: `✅ 资产"${name}"已成功接入到业务域"${activeDomain?.name}"并已自动选中。\n\n💡 提示：您可以在对话框中输入指令（如"开始分析"、"治理这些资产"）来启动数据治理分析。` 
+      }]);
     } catch (error) {
       console.error('创建资产失败:', error);
-      alert('创建资产失败');
+    }
+  };
+
+  const handleDeleteSource = async (id: string) => {
+    try {
+      await sourceService.deleteSource(id);
+      setSources(prev => prev.filter(s => s.id !== id));
+      
+      // 如果删除的是当前选中的资产，清空选择
+      if (selectedSource?.id === id) {
+        setSelectedSource(null);
+        setActiveSessionId(null);
+        setChatHistory([]);
+        setGovernanceResult(null);
+        setIsAnalyzing(false);
+        localStorage.removeItem('ai_governance_session_id');
+      }
+      
+      console.log(`✅ 资产已删除: ${id}`);
+    } catch (error) {
+      console.error('删除资产失败:', error);
     }
   };
 
@@ -493,7 +747,14 @@ const App: React.FC = () => {
     setChatHistory(prev => [...prev, { role: 'user', text: prompt }]);
 
     try {
-      const sourceContext = activeDomainSources.map(s => `[资产类型: ${s.type}, 资产名称: ${s.name}]\n资产内容: ${s.content}`).join('\n\n');
+      // 🔧 修复：如果用户选择了特定资产，只分析该资产；否则分析所有资产
+      const sourceContext = selectedSource 
+        ? `[资产类型: ${selectedSource.type}, 资产名称: ${selectedSource.name}]\n资产内容: ${selectedSource.content}`
+        : activeDomainSources.map(s => `[资产类型: ${s.type}, 资产名称: ${s.name}]\n资产内容: ${s.content}`).join('\n\n');
+      
+      // 🐛 调试：打印发送给后端的内容预览
+      console.log('📤 发送给后端的资产内容预览:', sourceContext.substring(0, 300));
+      console.log('📊 发送的内容总长度:', sourceContext.length);
       
       // 🚀 使用流式 SSE API
       await performGovernanceAnalysisStream(
@@ -673,10 +934,38 @@ const App: React.FC = () => {
               sources={activeDomainSources}
               activeDomainId={activeDomainId}
               onAddDomain={handleAddDomain}
-                  onDeleteDomain={handleDeleteDomain}
+              onDeleteDomain={handleDeleteDomain}
               onSelectDomain={handleSelectDomain}
-              onAddSource={handleAddSource} 
-              onSelectSource={setSelectedSource}
+              onAddSource={handleAddSource}
+              onDeleteSource={handleDeleteSource}
+              onSelectSource={(source: DataSource | null) => {
+                // ✅ 切换资产时，清空当前会话和治理结果
+                console.log('🔄 切换资产:', selectedSource?.name, '->', source?.name);
+                
+                // 🐛 调试：打印资产内容的前200个字符
+                if (source) {
+                  console.log('📄 新资产内容预览:', source.content.substring(0, 200));
+                  console.log('📊 新资产内容长度:', source.content.length);
+                }
+                if (selectedSource) {
+                  console.log('📄 旧资产内容预览:', selectedSource.content.substring(0, 200));
+                  console.log('📊 旧资产内容长度:', selectedSource.content.length);
+                }
+                
+                // 保存当前会话状态（如果有）
+                if (activeSessionId) {
+                  saveCurrentSessionState(activeSessionId);
+                }
+                
+                setSelectedSource(source);
+                setActiveSessionId(null); // 取消当前会话选择
+                setChatHistory([]); // 清空聊天历史
+                setGovernanceResult(null); // 清空治理结果
+                setIsAnalyzing(false); // 停止分析
+                localStorage.removeItem('ai_governance_session_id'); // 清除本地存储
+                
+                console.log('✅ 资产切换完成，已清空会话和治理结果');
+              }}
               activeSourceId={selectedSource?.id}
               theme={theme}
             />
@@ -742,21 +1031,23 @@ const App: React.FC = () => {
           data={interruptState.data!}
           onConfirm={async () => {
             if (!interruptState.sessionId) return;
+            // 立即关闭弹窗，避免重复显示
+            setInterruptState(null);
             try {
               await httpClient.post('/ai/resume', { sessionId: interruptState.sessionId });
-              setInterruptState(null);
             } catch (error) {
               console.error('恢复执行失败:', error);
             }
           }}
           onModify={async (modifiedObjects) => {
             if (!interruptState.sessionId) return;
+            // 立即关闭弹窗，避免重复显示
+            setInterruptState(null);
             try {
               await httpClient.post('/ai/update-and-resume', {
                 sessionId: interruptState.sessionId,
                 modifiedObjects: modifiedObjects,
               });
-              setInterruptState(null);
             } catch (error) {
               console.error('修改并恢复失败:', error);
             }
@@ -868,6 +1159,18 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* 通用确认弹窗 */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeModal}
+        theme={theme}
+        showCancel={confirmModal.showCancel}
+      />
     </div>
   );
 };

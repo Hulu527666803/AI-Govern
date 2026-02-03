@@ -11,7 +11,6 @@ import React, { useState } from 'react';
 import { Check, Edit3, X, AlertCircle } from 'lucide-react';
 
 interface InterruptObject {
-  id?: string;  // 添加ID字段支持
   name: string;
   chineseName: string;
   description?: string;
@@ -78,16 +77,11 @@ export const InterruptConfirmModal: React.FC<InterruptConfirmModalProps> = ({
                 {message}
               </p>
               {type === 'object_review' && (
-                <div className={`mt-3 space-y-1 text-xs ${
+                <div className={`mt-3 flex items-center gap-2 text-xs font-bold ${
                   isDark ? 'text-blue-400' : 'text-blue-600'
                 }`}>
-                  <div className="flex items-center gap-2 font-bold">
-                    <Edit3 className="w-3 h-3" />
-                    <span>您可以直接编辑对象名称和ID，或保持AI生成的默认值</span>
-                  </div>
-                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                    💡 提示：中文名称和ID已由AI自动生成，如果符合预期可直接确认
-                  </p>
+                  <Edit3 className="w-3 h-3" />
+                  <span>您可以直接点击对象名称进行修改</span>
                 </div>
               )}
             </div>
@@ -117,15 +111,10 @@ export const InterruptConfirmModal: React.FC<InterruptConfirmModalProps> = ({
                     : 'bg-gray-50 border-gray-200 hover:border-blue-300'
                 }`}
               >
-                {/* 对象标签和中文名 */}
-                <div className="flex items-center gap-3 mb-3">
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                    isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    对象 {idx + 1}
-                  </span>
+                {/* 对象中文名 */}
+                <div className="mb-3">
                   <input
-                    className={`flex-1 font-bold text-lg bg-transparent border-b-2 outline-none transition-colors px-2 py-1 ${
+                    className={`w-full font-bold text-lg bg-transparent border-b-2 outline-none transition-colors px-2 py-1 ${
                       isDark 
                         ? 'text-white border-transparent hover:border-blue-500 focus:border-blue-500' 
                         : 'text-slate-900 border-transparent hover:border-blue-500 focus:border-blue-500'
@@ -138,24 +127,6 @@ export const InterruptConfirmModal: React.FC<InterruptConfirmModalProps> = ({
 
                 {/* 对象详情 */}
                 <div className={`space-y-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  {/* ID编辑（可选） */}
-                  {obj.id && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold opacity-60">对象ID:</span>
-                      <input
-                        className={`flex-1 font-mono text-xs px-2 py-1 rounded border outline-none transition-colors ${
-                          isDark 
-                            ? 'bg-black/40 border-[#404040] text-slate-300 hover:border-blue-500 focus:border-blue-500' 
-                            : 'bg-white border-gray-300 text-slate-700 hover:border-blue-400 focus:border-blue-500'
-                        }`}
-                        value={obj.id}
-                        onChange={(e) => handleObjectEdit(idx, 'id', e.target.value)}
-                        placeholder="user_table_001"
-                        title="点击编辑对象ID（格式：{表名}_table_{序号}）"
-                      />
-                    </div>
-                  )}
-                  
                   <div className="flex items-center gap-2">
                     <span className="font-bold opacity-60">英文名:</span>
                     <span className={`font-mono px-2 py-0.5 rounded ${

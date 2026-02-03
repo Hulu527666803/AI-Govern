@@ -34,5 +34,16 @@ export const sourceService = {
   async deleteSource(id: string): Promise<boolean> {
     const result = await httpClient.delete<{ success: boolean }>(`/sources/${id}`);
     return result.success;
+  },
+
+  // 🐛 调试接口：获取资产详细信息
+  async getSourceDebugInfo(id: string): Promise<any> {
+    const result = await httpClient.get<{ success: boolean; data: any }>(`/sources/debug/${id}`);
+    
+    if (!result.success || !result.data) {
+      throw new Error('获取资产详情失败');
+    }
+    
+    return result.data;
   }
 };

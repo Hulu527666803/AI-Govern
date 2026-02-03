@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
-import { Layers, Network, FileSearch, Lightbulb, TableIcon, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle, Clock } from 'lucide-react';
+import { Layers, Network, FileSearch, Lightbulb, TableIcon, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { ICONS } from '../constants';
 import { useDomain } from '../hooks/useSession';
 
@@ -288,6 +288,63 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
       <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
         {activeTab === 'ONTOLOGY' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            {/* ✅ 问题3：治理依据和结语展示 */}
+            {result.summary && (
+              <div className={`p-6 border rounded-[28px] transition-all relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-blue-500/5 to-purple-500/5 border-blue-500/20' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-100'}`}>
+                <div className="flex items-start gap-4">
+                  <div className={`shrink-0 p-3 rounded-2xl border ${isDark ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-blue-100 border-blue-200 text-blue-600'}`}>
+                    <Lightbulb size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>治理推理总结</h4>
+                    <p className={`text-xs leading-relaxed font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      {result.summary}
+                    </p>
+                    
+                    {/* 展示治理过程的关键步骤 */}
+                    {result.thinkingSteps && result.thinkingSteps.length > 0 && (
+                      <div className={`mt-4 p-4 rounded-xl border ${isDark ? 'bg-black/40 border-blue-500/10' : 'bg-white/50 border-blue-100'}`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                          推理依据路径
+                        </p>
+                        <div className="space-y-2">
+                          {result.thinkingSteps.map((step, idx) => (
+                            <div key={idx} className="flex items-start gap-2">
+                              <div className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-bold ${
+                                isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                              }`}>
+                                {idx + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p className={`text-[10px] font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                                  {step.phase}: {step.title}
+                                </p>
+                                <p className={`text-[9px] mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                                  {step.description}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 结语 */}
+                    <div className={`mt-4 p-3 rounded-lg border flex items-start gap-2 ${isDark ? 'bg-green-500/5 border-green-500/20' : 'bg-green-50 border-green-100'}`}>
+                      <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${isDark ? 'text-green-400' : 'text-green-600'}`} />
+                      <p className={`text-[10px] font-medium leading-relaxed ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                        治理流程已完成，共识别 <strong>{result.objects?.length || 0}</strong> 个业务对象、
+                        <strong>{result.relationships?.length || 0}</strong> 个关系、
+                        <strong>{result.terms?.length || 0}</strong> 个业务术语和 
+                        <strong>{result.knowledge?.length || 0}</strong> 个业务规则。
+                        所有数据均已按照 G-ABC 范式进行结构化处理，可直接用于下游系统集成。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className={`flex items-center justify-between p-3 rounded-2xl border transition-colors ${isDark ? 'bg-[#1d1d1d]/40 border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
               <span className={`text-[10px] font-bold uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>展示视图</span>
               <div className={`flex gap-1.5 p-1 rounded-xl border transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-white border-gray-200'}`}>

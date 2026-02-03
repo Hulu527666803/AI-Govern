@@ -1,8 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown, MessageSquare, MessageSquarePlus, Trash2 } from 'lucide-react';
+import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown, MessageSquare, MessageSquarePlus, Trash2, Paperclip } from 'lucide-react';
 import { SourceType, DataSource, DataDomain } from '../types';
 import { testDatabaseConnection, getDatabaseMetadata, formatMetadata, DATABASE_TYPES } from '../services/databaseService';
+import { ConfirmModal } from './ConfirmModal';
 
 interface SourceSidebarProps {
   domains: DataDomain[];
@@ -12,6 +13,7 @@ interface SourceSidebarProps {
   onDeleteDomain?: (id: string) => void;
   onSelectDomain: (id: string) => void;
   onAddSource: (type: SourceType, name: string, content: string) => void;
+  onDeleteSource?: (id: string) => void;
   onSelectSource: (source: DataSource | null) => void;
   activeSourceId?: string;
   theme?: 'light' | 'dark';
@@ -26,7 +28,8 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
   onAddDomain,
   onDeleteDomain,
   onSelectDomain,
-  onAddSource, 
+  onAddSource,
+  onDeleteSource, 
   onSelectSource,
   activeSourceId,
   theme = 'dark'
@@ -35,6 +38,25 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [domainName, setDomainName] = useState('');
   const [domainDesc, setDomainDesc] = useState('');
+  
+  // 确认弹窗状态
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'warning' | 'error' | 'info' | 'confirm';
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    showCancel: false,
+  });
+  
+  // 待删除资产信息
+  const [sourceToDelete, setSourceToDelete] = useState<DataSource | null>(null);
   
   const [assetType, setAssetType] = useState<SourceType>(SourceType.DDL);
   const [inputMode, setInputMode] = useState<InputMode>('TEXT');
@@ -131,19 +153,65 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     }
   };
 
+  const showModal = (
+    type: 'success' | 'warning' | 'error' | 'info' | 'confirm',
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    showCancel: boolean = false
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      onConfirm,
+      showCancel,
+    });
+  };
+
+  const closeModal = () => {
+    setConfirmModal({ ...confirmModal, isOpen: false });
+  };
+
+  const handleDeleteSourceClick = (source: DataSource, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSourceToDelete(source);
+    showModal(
+      'warning',
+      '确认删除资产',
+      `确定要删除资产 "${source.name}" 吗？删除后将无法恢复。`,
+      () => {
+        if (onDeleteSource && sourceToDelete) {
+          onDeleteSource(sourceToDelete.id);
+          setSourceToDelete(null);
+          closeModal();
+          showModal('success', '删除成功', `资产 "${source.name}" 已成功删除。`, undefined, false);
+        }
+      },
+      true
+    );
+  };
+
+  const handleUploadAttachment = (source: DataSource, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // TODO: 上传附件逻辑待定
+    showModal('info', '功能开发中', '上传附件功能正在开发中，敬请期待！', undefined, false);
+  };
+
   const handleAssetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     let finalContent = "";
     
     // 检查资产名称
     if (!assetName || !assetName.trim()) {
-      alert('⚠️ 请填写资产展示名称');
+      showModal('warning', '输入错误', '请填写资产展示名称', undefined, false);
       return;
     }
     
     if (assetType === SourceType.DATABASE) {
       if (connectionStatus !== 'success' || !fetchedMetadata) {
-        alert('⚠️ 请先测试连接并成功获取元数据后再提交');
+        showModal('warning', '连接错误', '请先测试连接并成功获取元数据后再提交', undefined, false);
         return;
       }
       finalContent = fetchedMetadata;
@@ -153,7 +221,7 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
 
     // 检查内容
     if (!finalContent || !finalContent.trim()) {
-      alert('⚠️ 请提供资产内容或元数据');
+      showModal('warning', '内容为空', '请提供资产内容或元数据', undefined, false);
       return;
     }
 
@@ -166,7 +234,7 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     setShowAssetModal(false);
     
     // 成功提示
-    alert(`✅ 资产 "${assetName.trim()}" 已成功接入！`);
+    showModal('success', '接入成功', `资产 "${assetName.trim()}" 已成功接入！`, undefined, false);
   };
 
   const renderIcon = (type: SourceType) => {
@@ -265,23 +333,58 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
           ) : (
             <div className="space-y-1 px-3">
               {sources.map(source => (
-                <button
+                <div
                   key={source.id}
-                  onClick={() => onSelectSource(source)}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-4 border ${
+                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 border group ${
                     activeSourceId === source.id 
                       ? (isDark ? 'bg-[#177ddc]/10 border-[#177ddc]/30' : 'bg-blue-50 border-blue-100 shadow-sm') 
                       : 'hover:bg-slate-50 dark:hover:bg-[#1d1d1d] border-transparent'
                   }`}
                 >
-                  <div className={`p-2 rounded-lg ${activeSourceId === source.id ? 'bg-blue-500 text-white shadow-lg' : (isDark ? 'bg-[#1d1d1d] text-slate-500 border border-[#303030]' : 'bg-gray-100 text-slate-500')}`}>
-                    {renderIcon(source.type)}
+                  <button
+                    onClick={() => onSelectSource(source)}
+                    className="flex items-center gap-3 flex-1 min-w-0"
+                  >
+                    <div className={`p-2 rounded-lg ${activeSourceId === source.id ? 'bg-blue-500 text-white shadow-lg' : (isDark ? 'bg-[#1d1d1d] text-slate-500 border border-[#303030]' : 'bg-gray-100 text-slate-500')}`}>
+                      {renderIcon(source.type)}
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <h3 className={`text-[11px] font-bold truncate ${activeSourceId === source.id ? (isDark ? 'text-white' : 'text-blue-700') : (isDark ? 'text-slate-200' : 'text-slate-700')}`}>{source.name}</h3>
+                      <p className={`text-[8px] font-bold uppercase mt-0.5 tracking-wider ${activeSourceId === source.id ? 'text-blue-400' : 'text-slate-400'}`}>{source.type}</p>
+                    </div>
+                  </button>
+                  
+                  {/* 操作按钮组 */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 上传附件按钮 */}
+                    <button
+                      onClick={(e) => handleUploadAttachment(source, e)}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        isDark 
+                          ? 'hover:bg-blue-500/20 hover:text-blue-400' 
+                          : 'hover:bg-blue-50 hover:text-blue-500'
+                      }`}
+                      title="上传附件"
+                    >
+                      <Paperclip size={12} />
+                    </button>
+                    
+                    {/* 删除按钮 */}
+                    {onDeleteSource && (
+                      <button
+                        onClick={(e) => handleDeleteSourceClick(source, e)}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          isDark 
+                            ? 'hover:bg-red-500/20 hover:text-red-400' 
+                            : 'hover:bg-red-50 hover:text-red-500'
+                        }`}
+                        title="删除资产"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                    <h3 className={`text-[11px] font-bold truncate ${activeSourceId === source.id ? (isDark ? 'text-white' : 'text-blue-700') : (isDark ? 'text-slate-200' : 'text-slate-700')}`}>{source.name}</h3>
-                    <p className={`text-[8px] font-bold uppercase mt-0.5 tracking-wider ${activeSourceId === source.id ? 'text-blue-400' : 'text-slate-400'}`}>{source.type}</p>
-                  </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -623,6 +726,18 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
            </div>
         </div>
       )}
+      
+      {/* 确认弹窗 */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeModal}
+        theme={theme}
+        showCancel={confirmModal.showCancel}
+      />
     </div>
   );
 };

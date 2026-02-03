@@ -222,20 +222,19 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
               </div>
 
               <h2 className={`text-3xl font-bold mb-4 tracking-tight transition-colors ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {activeDomainName ? `智能治数域：${activeDomainName}` : '准备好开始了吗？'}
+                {activeDomainName 
+                  ? (selectedSource 
+                      ? `智能治数域：${activeDomainName} / ${selectedSource.name || '资产'}` 
+                      : `智能治数域：${activeDomainName}`)
+                  : '准备好开始了吗？'}
               </h2>
-              
-              <div className={`flex items-center gap-2 mb-10 px-4 py-1.5 rounded-full border transition-all ${isDark ? 'bg-[#1d1d1d] border-[#303030] text-slate-400' : 'bg-white border-gray-200 text-slate-500 shadow-sm'}`}>
-                <Zap size={14} className="text-blue-400" />
-                <span className="text-[11px] font-black uppercase tracking-widest">
-                  AI 引擎: 后端统一配置 (Gemini 2.0 Flash)
-                </span>
-              </div>
 
               <p className={`max-w-md text-sm leading-relaxed mb-12 font-medium transition-colors ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {activeDomainName 
                   ? (activeSessionId 
-                      ? `我已准备好对 [${activeDomainName}] 域进行 G-ABC 本体分析。下达指令后，您将实时看到我的思考推演过程。`
+                      ? (selectedSource
+                          ? `我已准备好对 [${activeDomainName}] 域的 [${selectedSource.name}] 资产进行 G-ABC 本体分析。下达指令后，您将实时看到我的思考推演过程。`
+                          : `我已准备好对 [${activeDomainName}] 域进行 G-ABC 本体分析。下达指令后，您将实时看到我的思考推演过程。`)
                       : '您可以直接输入指令开始分析，系统将自动为您创建新的会话。')
                   : '请先在左侧侧边栏选择一个业务数据域，并接入元数据资产。'}
               </p>
@@ -255,7 +254,18 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
               )}
             </div>
           ) : (
-            chatHistory.map((msg, i) => (
+            chatHistory.map((msg, i) => {
+              // 🔍 添加日志：检查每条消息的thinkingSteps
+              if (msg.role === 'ai' && i % 2 === 1) { // 只对AI消息日志，且不要每次重渲染都打印
+                console.log(`🎨 渲染AI消息 ${Math.floor(i / 2) + 1}:`, {
+                  hasResult: !!msg.result,
+                  hasThinkingSteps: !!msg.result?.thinkingSteps,
+                  thinkingStepsCount: msg.result?.thinkingSteps?.length || 0,
+                  thinkingStepsPreview: msg.result?.thinkingSteps?.slice(0, 2).map((s: any) => s.phase) || []
+                });
+              }
+              
+              return (
               <div key={i} className={`flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border shadow-sm transition-colors ${
                   msg.role === 'user' 
@@ -293,54 +303,64 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
                   </div>
                 </div>
               </div>
-            ))
+            );
+            })
           )}
           
           {isAnalyzing && (() => {
-            // ✅ 只显示最新的一个思维步骤卡片，带切换动效
+            // ✅ 显示所有思维步骤卡片，展示完整推理过程
             const lastMessage = chatHistory[chatHistory.length - 1];
             const realSteps = (lastMessage as any)?.thinkingSteps || [];
-            const currentStep = realSteps[realSteps.length - 1]; // 只取最新的一个
             
             return (
               <div className="flex gap-4">
                 <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-all ${isDark ? 'bg-[#177ddc] border-[#1668dc] text-white shadow-[0_0_15px_rgba(23,125,220,0.3)]' : 'bg-blue-600 border-blue-500 text-white shadow-md'}`}>
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex-1">
-                  {currentStep ? (
-                    <div 
-                      key={currentStep.phase + currentStep.title}
-                      className={`p-6 rounded-2xl border animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-                        isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                          isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                        }`}>
-                          {currentStep.phase}
-                        </span>
-                        <h4 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                          {currentStep.title}
-                        </h4>
-                      </div>
-                      {currentStep.description && (
-                        <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                          {currentStep.description}
-                        </p>
-                      )}
-                      {currentStep.details && currentStep.details.length > 0 && (
-                        <ul className={`mt-3 space-y-1 text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                          {currentStep.details.map((detail: string, idx: number) => (
-                            <li key={idx} className="flex items-center gap-2">
-                              <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-600'}`}></span>
-                              {detail}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
+                <div className="flex-1 space-y-4">
+                  {realSteps.length > 0 ? (
+                    <>
+                      {/* ✅ 显示所有步骤 */}
+                      {realSteps.map((step: ThinkingStep, stepIdx: number) => (
+                        <div 
+                          key={`${step.phase}-${step.title}-${stepIdx}`}
+                          className={`p-6 rounded-2xl border animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+                            isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200 shadow-sm'
+                          }`}
+                          style={{ animationDelay: `${stepIdx * 100}ms` }}
+                        >
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                              isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                            }`}>
+                              {step.phase} 阶段
+                            </span>
+                            <h4 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                              {step.title}
+                            </h4>
+                            {/* 最新步骤显示加载动画 */}
+                            {stepIdx === realSteps.length - 1 && (
+                              <Loader2 className={`w-4 h-4 animate-spin ml-auto ${isDark ? 'text-blue-500' : 'text-blue-600'}`} />
+                            )}
+                          </div>
+                          {step.description && (
+                            <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                              {step.description}
+                            </p>
+                          )}
+                          {step.details && step.details.length > 0 && (
+                            <ul className={`mt-3 space-y-1 text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
+                              {step.details.map((detail: string, idx: number) => (
+                                <li key={idx} className="flex items-center gap-2">
+                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-600'}`}></span>
+                                  {detail}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </>
                   ) : (
                     <div className={`p-6 rounded-2xl border ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200'}`}>
                       <div className={`flex items-center gap-3 text-xs font-bold animate-pulse ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>

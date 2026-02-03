@@ -4,14 +4,29 @@ import { Session } from '../types';
 class SessionService {
   /**
    * 创建新会话
+   * ✅ 新增：支持关联资产 (sourceId, sourceName)
    */
-  async createSession(domainId: string, domainName: string, metadata: any = {}): Promise<string> {
+  async createSession(
+    domainId: string, 
+    domainName: string, 
+    sourceId?: string, 
+    sourceName?: string,
+    metadata: any = {}
+  ): Promise<string> {
     const token = httpClient.getToken();
+    
+    // ✅ 将 source 信息放入 metadata
+    const sessionMetadata = {
+      ...metadata,
+      sourceId: sourceId || metadata.sourceId,
+      sourceName: sourceName || metadata.sourceName
+    };
+    
     const response = await httpClient.post('/sessions/create', {
       userId: token || 'anonymous',
       domainId,
       domainName,
-      metadata
+      metadata: sessionMetadata
     });
     return response.sessionId;
   }

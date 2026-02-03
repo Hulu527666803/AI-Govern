@@ -100,6 +100,8 @@ export interface Session {
   userId: string;
   domainId: string;
   domainName: string;
+  sourceId?: string;  // ✅ 关联的资产ID
+  sourceName?: string;  // ✅ 关联的资产名称
   createdAt: string;
   lastActivity: string;
   status: string;
