@@ -33,6 +33,14 @@ export interface OntologyObject {
     type: string;
     businessName: string;
     description: string;
+    /** 是否字典字段，需生成 name_txt 用于后续填值 */
+    isDict?: boolean;
+    /** 是否枚举字段，需生成 name_txt 用于后续填值 */
+    isEnum?: boolean;
+    /** 枚举映射，如 "0=否,1=是" 或 "01=工程人员,02=技术人员" */
+    enumMapping?: string;
+    /** 同表同名字段不同类型时的更名来源 */
+    renamedFrom?: string;
   }[];
   mappings: string[]; 
 }
@@ -75,6 +83,22 @@ export interface SampleData {
   rows: Record<string, any>[];
 }
 
+/** 同名字段不同类型时的更名记录（a） */
+export interface FieldRenameRecord {
+  objectName: string;
+  fieldName: string;
+  newName: string;
+  reason: string;
+}
+
+/** 字典/枚举 _txt 字段与 SQL 解析新增字段的导出记录（b/c/e） */
+export interface FieldChangeRecord {
+  renames: FieldRenameRecord[];
+  dictTxtFields: { objectName: string; fieldName: string; txtField: string }[];
+  enumTxtFields: { objectName: string; fieldName: string; txtField: string; enumMapping: string }[];
+  sqlDerivedFields: { objectName: string; fieldName: string; description?: string }[];
+}
+
 export interface GovernanceResult {
   thinkingSteps: ThinkingStep[];
   objects: OntologyObject[];
@@ -84,6 +108,8 @@ export interface GovernanceResult {
   sampleData: SampleData[];
   summary: string;
   modelUsed?: string;
+  /** a~e 导出用：字段更名/字典_txt/枚举_txt/SQL解析字段记录 */
+  fieldChangeRecord?: FieldChangeRecord;
 }
 
 export type AIEngineType = 'GEMINI_SDK' | 'OPENAI_COMPATIBLE';

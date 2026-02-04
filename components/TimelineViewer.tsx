@@ -16,9 +16,11 @@ interface TimelineViewerProps {
   onClose: () => void;
   onRestore?: (state: CheckpointState) => void;
   isDark?: boolean;
+  /** 内嵌模式（在右侧 Tab 内展示，不用 fixed 遮罩） */
+  inline?: boolean;
 }
 
-export const TimelineViewer: React.FC<TimelineViewerProps> = ({ sessionId, onClose, onRestore, isDark = true }) => {
+export const TimelineViewer: React.FC<TimelineViewerProps> = ({ sessionId, onClose, onRestore, isDark = true, inline = false }) => {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<Checkpoint | null>(null);
@@ -96,8 +98,8 @@ export const TimelineViewer: React.FC<TimelineViewerProps> = ({ sessionId, onClo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-6xl h-[90vh] flex ${isDark ? 'bg-slate-800' : 'bg-white'} rounded-lg shadow-2xl`}>
+    <div className={inline ? 'h-full w-full flex' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'}>
+      <div className={`${inline ? 'w-full h-full flex rounded-none' : 'w-full max-w-6xl h-[90vh] flex rounded-lg shadow-2xl'} ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
         {/* 左侧：时间轴列表 */}
         <div className={`w-1/2 border-r ${isDark ? 'border-slate-700' : 'border-slate-200'} overflow-y-auto`}>
           <div className={`sticky top-0 z-10 p-4 border-b ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
@@ -108,12 +110,14 @@ export const TimelineViewer: React.FC<TimelineViewerProps> = ({ sessionId, onClo
                   时间旅行
                 </h2>
               </div>
-              <button
-                onClick={onClose}
-                className={`p-1 rounded hover:${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}
-              >
-                <X className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`} />
-              </button>
+              {!inline && (
+                <button
+                  onClick={onClose}
+                  className={`p-1 rounded hover:${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}
+                >
+                  <X className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`} />
+                </button>
+              )}
             </div>
             <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               会话: {sessionId.slice(0, 20)}...

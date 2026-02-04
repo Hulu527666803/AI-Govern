@@ -15,13 +15,41 @@ export function renderD3Graph(
     const svg = d3.select(svgRef);
     svg.selectAll("*").remove();
 
-    const nodes: GraphNode[] = result.objects.map(obj => ({
-      id: obj.id, name: obj.name, businessName: obj.businessName
-    }));
+    const nodes: GraphNode[] = (result.objects || []).map(obj => ({
+      id: String(obj.id ?? obj.name ?? '').trim() || `node-${Math.random().toString(36).slice(2, 9)}`,
+      name: obj.name ?? '',
+      businessName: obj.businessName ?? obj.name ?? '未命名',
+    })).filter(n => n.id);
 
-    const links: GraphLink[] = result.relationships.map(rel => ({
-      source: rel.sourceId, target: rel.targetId, label: rel.label
-    }));
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+    const nodeByName = new Map(nodes.map(n => [n.name, n]));
+
+    const links: GraphLink[] = [];
+    const rawRels = result.relationships || [];
+    for (const rel of rawRels) {
+      const sid = rel.sourceId ?? (rel as any).source ?? (rel as any).sourceName;
+      const tid = rel.targetId ?? (rel as any).target ?? (rel as any).targetName;
+      if (!sid || !tid) continue;
+      const sourceNode = nodeById.get(sid) ?? nodeByName.get(sid) ?? nodeById.get(String(sid)) ?? nodeByName.get(String(sid));
+      const targetNode = nodeById.get(tid) ?? nodeByName.get(tid) ?? nodeById.get(String(tid)) ?? nodeByName.get(String(tid));
+      if (sourceNode && targetNode) {
+        links.push({
+          source: sourceNode,
+          target: targetNode,
+          label: rel.label ?? (rel as any).cardinality ?? '关联',
+        });
+      }
+    }
+
+    if (nodes.length === 0) {
+      const g = svg.append("g").attr("transform", `translate(${width / 2},${height / 2})`);
+      g.append("text")
+        .attr("text-anchor", "middle")
+        .attr("fill", isDark ? "#666" : "#999")
+        .attr("style", "font-size: 12px;")
+        .text("暂无业务对象，无法绘制图谱");
+      return;
+    }
 
     // 创建缩放行为
     const zoom = d3.zoom<SVGSVGElement, unknown>()
@@ -35,26 +63,38 @@ export function renderD3Graph(
     // 创建容器组
     const container = svg.append('g');
 
+    // 星空图布局：环形均匀分布，半径随节点数增加，力导向仅微调
+    const cx = width / 2;
+    const cy = height / 2;
+    const n = nodes.length;
+    const baseR = Math.min(width, height) * 0.32;
+    const radius = n <= 3 ? baseR : baseR + Math.min(n * 6, 80);
+    const collisionR = 38 + Math.min(n * 2, 30);
+    nodes.forEach((node, i) => {
+      const angle = (i / Math.max(n, 1)) * 2 * Math.PI - Math.PI / 2;
+      (node as any).x = cx + radius * Math.cos(angle);
+      (node as any).y = cy + radius * Math.sin(angle);
+    });
+
     const simulation = d3.forceSimulation<GraphNode>(nodes)
-      .force("link", d3.forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(120))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(40));
+      .force("link", d3.forceLink<GraphNode, GraphLink>(links).distance(80))
+      .force("charge", d3.forceManyBody().strength(-180))
+      .force("center", d3.forceCenter(cx, cy))
+      .force("collision", d3.forceCollide().radius(collisionR));
 
-    const linkColor = isDark ? "#303030" : "#f0f0f0";
-    const nodeStroke = isDark ? "#177ddc" : "#1677ff";
-    const textFill = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
+    const linkColor = isDark ? "#5eb3f6" : "#1677ff";
+    const linkStrokeOpacity = 0.7;
+    const nodeStroke = isDark ? "#5eb3f6" : "#1677ff";
+    const textFill = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.75)";
+    const nodeGlow = isDark ? "#177ddc" : "#94c5ff";
 
-    const link = container.append("g")
-      .attr("stroke", linkColor)
-      .attr("stroke-opacity", 0.6)
-      .selectAll("line")
-      .data(links)
-      .join("line")
-      .attr("stroke-width", 1.5)
-      .attr("marker-end", "url(#arrowhead)");
-
-    container.append("defs").append("marker")
+    // 发光滤镜（星空感）
+    const defs = container.append("defs");
+    defs.append("filter").attr("id", "star-glow")
+      .append("feGaussianBlur").attr("stdDeviation", 2).attr("result", "blur");
+    defs.select("filter#star-glow").append("feMerge")
+      .selectAll("feMergeNode").data(["blur", "SourceGraphic"]).join("feMergeNode").attr("in", d => d);
+    defs.append("marker")
       .attr("id", "arrowhead")
       .attr("viewBox", "0 -5 10 10")
       .attr("refX", 20)
@@ -85,9 +125,10 @@ export function renderD3Graph(
 
     node.append("circle")
       .attr("r", 14)
-      .attr("fill", isDark ? "#141414" : "white")
+      .attr("fill", isDark ? "#0f172a" : "white")
       .attr("stroke", nodeStroke)
       .attr("stroke-width", 2)
+      .attr("filter", isDark ? "url(#star-glow)" : null)
       .attr("class", "cursor-move shadow-md");
 
     node.append("text")
@@ -109,34 +150,38 @@ export function renderD3Graph(
         .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 5);
     });
 
-    // 模拟稳定后，自动缩放
+    // 模拟稳定后，自动缩放（避免单节点或零范围导致 NaN）
     simulation.on("end", () => {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       nodes.forEach(n => {
-        if (n.x! < minX) minX = n.x!;
-        if (n.y! < minY) minY = n.y!;
-        if (n.x! > maxX) maxX = n.x!;
-        if (n.y! > maxY) maxY = n.y!;
+        if (n.x != null && n.x < minX) minX = n.x;
+        if (n.y != null && n.y < minY) minY = n.y;
+        if (n.x != null && n.x > maxX) maxX = n.x;
+        if (n.y != null && n.y > maxY) maxY = n.y;
       });
 
       const padding = 50;
-      const graphWidth = maxX - minX;
-      const graphHeight = maxY - minY;
+      let graphWidth = maxX - minX;
+      let graphHeight = maxY - minY;
+      if (!Number.isFinite(graphWidth) || graphWidth <= 0) graphWidth = 100;
+      if (!Number.isFinite(graphHeight) || graphHeight <= 0) graphHeight = 100;
+
       const scale = Math.min(
         (width - padding * 2) / graphWidth,
         (height - padding * 2) / graphHeight,
         1
       );
+      const translateX = width / 2 - ((minX + maxX) / 2) * scale;
+      const translateY = height / 2 - ((minY + maxY) / 2) * scale;
 
-      const translateX = (width - (minX + maxX) * scale) / 2;
-      const translateY = (height - (minY + maxY) * scale) / 2;
-
-      svg.transition()
-        .duration(750)
-        .call(
-          zoom.transform as any,
-          d3.zoomIdentity.translate(translateX, translateY).scale(scale)
-        );
+      if (Number.isFinite(scale) && Number.isFinite(translateX) && Number.isFinite(translateY)) {
+        svg.transition()
+          .duration(750)
+          .call(
+            zoom.transform as any,
+            d3.zoomIdentity.translate(translateX, translateY).scale(scale)
+          );
+      }
     });
 
     function drag(simulation: d3.Simulation<GraphNode, GraphLink>) {

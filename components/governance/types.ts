@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { GovernanceResult, DataSource } from '../../types';
+import { GovernanceResult, DataSource, FieldChangeRecord } from '../../types';
 
 export interface GovernanceStudioProps {
   result: GovernanceResult | null;
@@ -92,6 +92,6 @@ export interface ExtendedFieldChanges {
   };
 }
 
-export type TabType = 'ONTOLOGY' | 'GLOSSARY' | 'METRICS' | 'SAMPLES';
+export type TabType = 'ONTOLOGY' | 'GLOSSARY' | 'METRICS' | 'CHANGES';
 export type ExportType = 'M3' | 'MYSQL' | 'DM';
 export type PublishStep = 'CONFIG' | 'PROGRESS' | 'RESULT';

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Loader2, Brain, CheckCircle2, User, Bot, Paperclip, Cpu, Settings as SettingsIcon, Zap, Globe, MessageSquare, MessageSquarePlus, Trash2 } from 'lucide-react';
+import { Send, Sparkles, Loader2, Brain, CheckCircle2, User, Bot, Paperclip, Cpu, Settings as SettingsIcon, Zap, Globe, MessageSquare, MessageSquarePlus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { GovernanceResult, ThinkingStep, AISettings, Session, DataSource } from '../types';
 import { ContextPanel } from './ContextPanel';
 
@@ -21,52 +21,118 @@ interface AnalysisCenterProps {
   lastUpdated?: number;
 }
 
-// 问题3修复：添加安全检查防止访问 undefined 的 phase 属性
-const ThinkingLog: React.FC<{ steps: ThinkingStep[]; isLive?: boolean; theme?: 'light' | 'dark' }> = ({ steps, isLive, theme = 'dark' }) => {
-  const visibleCount = steps.length;
+/** 打字机效果：逐字显示文本 */
+const TypingText: React.FC<{ fullText: string; animate: boolean; isDark: boolean; speedMs?: number }> = ({ fullText, animate, isDark, speedMs = 20 }) => {
+  const [visibleLength, setVisibleLength] = useState(0);
+  useEffect(() => {
+    if (!animate || fullText.length === 0) {
+      setVisibleLength(fullText.length);
+      return;
+    }
+    setVisibleLength(0);
+    let n = 0;
+    const t = setInterval(() => {
+      n += 1;
+      setVisibleLength(n);
+      if (n >= fullText.length) clearInterval(t);
+    }, speedMs);
+    return () => clearInterval(t);
+  }, [fullText, animate]);
+  return (
+    <span className={`whitespace-pre-wrap ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+      {fullText.slice(0, visibleLength)}
+      {animate && visibleLength < fullText.length && <span className="inline-block w-2 h-4 ml-0.5 align-middle bg-blue-500 animate-pulse" />}
+    </span>
+  );
+};
+
+/** 治理成果摘要可折叠：默认摘要 + 展开查看 N 个对象 */
+const GovernanceSummaryCollapse: React.FC<{ result: GovernanceResult; theme?: 'light' | 'dark' }> = ({ result, theme = 'dark' }) => {
+  const [expanded, setExpanded] = useState(false);
   const isDark = theme === 'dark';
+  const n = (result.objects?.length ?? 0) + (result.relationships?.length ?? 0) + (result.terms?.length ?? 0) + (result.knowledge?.length ?? 0);
+  return (
+    <div className={`mt-6 border rounded-2xl overflow-hidden transition-colors ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-100'}`}>
+      <button type="button" onClick={() => setExpanded(!expanded)} className="w-full p-5 flex gap-4 items-start text-left">
+        <div className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center border ${isDark ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-blue-100 border-blue-200 text-blue-600'}`}>
+          <CheckCircle2 className="w-3.5 h-3.5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>治理成果摘要</p>
+          <p className={`text-[13px] leading-relaxed font-semibold line-clamp-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{result.summary}</p>
+          <p className={`mt-2 text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            {expanded ? '点击收起' : `展开查看 ${result.objects?.length ?? 0} 个对象、${result.relationships?.length ?? 0} 个关系、${result.terms?.length ?? 0} 个术语、${result.knowledge?.length ?? 0} 条规则`}
+          </p>
+        </div>
+        <span className={`shrink-0 p-1 rounded ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+      </button>
+      {expanded && (
+        <div className={`px-5 pb-5 pt-0 border-t ${isDark ? 'border-blue-500/10' : 'border-blue-100'}`}>
+          <div className={`mt-3 p-4 rounded-xl font-medium text-[12px] ${isDark ? 'bg-black/30 text-slate-300' : 'bg-white text-slate-600'}`}>
+            <p>共识别 <strong>{result.objects?.length ?? 0}</strong> 个业务对象、<strong>{result.relationships?.length ?? 0}</strong> 个关系、<strong>{result.terms?.length ?? 0}</strong> 个术语、<strong>{result.knowledge?.length ?? 0}</strong> 条业务规则。详细结构请查看右侧「治理结果」面板。</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
-  // 过滤掉无效的 step
+/** 时间线式思考步骤：左侧竖线+节点，进行中高亮+脉冲，已完成打勾 */
+const ThinkingLog: React.FC<{ steps: ThinkingStep[]; isLive?: boolean; theme?: 'light' | 'dark' }> = ({ steps, isLive, theme = 'dark' }) => {
+  const isDark = theme === 'dark';
   const validSteps = steps.filter(step => step && step.phase && step.title);
-
-  if (validSteps.length === 0) {
-    return null;
-  }
+  if (validSteps.length === 0) return null;
 
   return (
-    <div className="mb-6 space-y-4 animate-in fade-in duration-500">
-      <div className="flex items-center gap-2 px-1 mb-2">
-        <Cpu className={`w-4 h-4 animate-pulse ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+    <div className="mb-6 animate-in fade-in duration-500">
+      <div className="flex items-center gap-2 px-1 mb-4">
+        <Cpu className={`w-4 h-4 ${isLive ? 'animate-pulse' : ''} ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
         <span className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
           {isLive ? '正在实时进行 G-ABC 范式推演...' : 'G-ABC 治理推演路径存档'}
         </span>
       </div>
-      
-      {validSteps.slice(0, visibleCount).map((step, idx) => (
-        <div key={`${step.phase}-${idx}`} className={`border rounded-2xl overflow-hidden shadow-sm animate-in slide-in-from-left-2 duration-700 transition-colors ${isDark ? 'bg-[#1d1d1d]/40 border-[#303030]' : 'bg-white border-gray-100 shadow-sm'}`}>
-           <div className={`px-5 py-3 flex items-center gap-3 border-b transition-colors ${isDark ? 'border-[#303030]/40 bg-black/20' : 'bg-gray-50/50 border-gray-50'}`}>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-tighter ${isDark ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
-                {step.phase} 阶段
-              </span>
-              <h4 className={`text-xs font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{step.title}</h4>
-              {isLive && idx === visibleCount - 1 && <Loader2 className={`w-3 h-3 animate-spin ml-auto ${isDark ? 'text-blue-500' : 'text-blue-600'}`} />}
-           </div>
-           <div className="p-4 space-y-3">
-              <p className={`text-[11px] leading-relaxed font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{step.description}</p>
-              <div className="flex flex-wrap gap-2">
-                {step.details?.map((d, i) => (
-                  <span key={i} className={`text-[10px] px-2 py-1 rounded-md border flex items-center gap-1.5 transition-colors ${isDark ? 'text-slate-400 bg-[#1d1d1d] border-[#303030]/50' : 'text-slate-500 bg-gray-50 border-gray-100'}`}>
-                    <div className={`w-1 h-1 rounded-full ${isDark ? 'bg-blue-500/50' : 'bg-blue-400'}`} />
-                    {d}
-                  </span>
-                ))}
+      <div className="relative pl-6 border-l-2 border-dashed min-h-[20px]" style={{ borderColor: isDark ? 'rgba(23,125,220,0.35)' : 'rgba(22,119,255,0.25)' }}>
+        {validSteps.map((step, idx) => {
+          const isActive = isLive && idx === validSteps.length - 1;
+          const isDone = !isLive || idx < validSteps.length - 1;
+          return (
+            <div key={`${step.phase}-${idx}`} className={`relative -left-[26px] flex gap-3 mb-5 last:mb-0 animate-in slide-in-from-left-2 duration-500`} style={{ animationDelay: `${idx * 80}ms` }}>
+              <div className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                isActive ? (isDark ? 'bg-blue-500/30 border-blue-400 shadow-[0_0_12px_rgba(23,125,220,0.5)]' : 'bg-blue-100 border-blue-500 shadow-md') : ''
+              } ${isDone ? (isDark ? 'bg-blue-500/20 border-blue-500/50' : 'bg-blue-50 border-blue-200') : ''}`}>
+                {isDone ? <CheckCircle2 className={`w-3.5 h-3.5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} /> : isActive ? <Loader2 className={`w-3.5 h-3.5 animate-spin ${isDark ? 'text-blue-400' : 'text-blue-600'}`} /> : null}
               </div>
-           </div>
-        </div>
-      ))}
+              <div className={`flex-1 pt-0.5 pb-3 px-4 rounded-xl border transition-colors ${isActive ? (isDark ? 'bg-blue-500/5 border-blue-500/30' : 'bg-blue-50/80 border-blue-200') : ''} ${isDark ? 'bg-[#1d1d1d]/40 border-[#303030]' : 'bg-white border-gray-100'}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${isDark ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>{step.phase}</span>
+                  <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>{step.title}</h4>
+                </div>
+                {step.description && (
+                  <p className={`mt-2 text-[11px] leading-relaxed font-medium ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {isActive && isLive ? (
+                      <TypingText fullText={step.description} animate={true} isDark={isDark} speedMs={12} />
+                    ) : (
+                      step.description
+                    )}
+                  </p>
+                )}
+                {step.details && step.details.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {step.details.map((d, i) => (
+                      <span key={i} className={`text-[10px] px-2 py-0.5 rounded-md border ${isDark ? 'text-slate-400 bg-[#1d1d1d] border-[#303030]/50' : 'text-slate-500 bg-gray-50 border-gray-100'}`}>{d}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
+
+import { KnowledgeUploader } from './KnowledgeUploader';
 
 export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({ 
   isAnalyzing, 
@@ -87,8 +153,11 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
 }) => {
   const [input, setInput] = useState('');
   const [liveSteps, setLiveSteps] = useState<ThinkingStep[]>([]);
+  const [showSkills, setShowSkills] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatStartRef = useRef<HTMLDivElement>(null); // 问题2：用于滚动到聊天开始位置
+  const lastCardRef = useRef<HTMLDivElement | null>(null); // 最新卡片锚点，便于滚动到可见
+  const scrollContainerRef = useRef<HTMLDivElement>(null); // 滚动容器，用于强制滚到底部
   const isDark = theme === 'dark';
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevSessionIdRef = useRef<string | null>(null);
@@ -125,13 +194,31 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
     }
   }, [activeSessionId, chatHistory]);
 
-  // 正常的滚动到底部（新消息或分析中）
+  // 新消息或分析中时滚动到最新内容：优先用滚动容器滚到底部
   useEffect(() => {
-    // 只有在不是会话切换的情况下才滚动到底部
     if (!prevSessionIdRef.current || prevSessionIdRef.current === activeSessionId) {
-      scrollToBottom();
+      const run = () => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+          return;
+        }
+        const el = lastCardRef.current ?? chatEndRef.current;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      };
+      const t = setTimeout(run, 400);
+      return () => clearTimeout(t);
     }
-  }, [chatHistory.length, isAnalyzing, liveSteps]);
+  }, [chatHistory.length, isAnalyzing, liveSteps.length, activeSessionId]);
+
+  // 分析进行中时定期滚到底部，使 SSE 推送的步骤始终可见
+  useEffect(() => {
+    if (!isAnalyzing) return;
+    const interval = setInterval(() => {
+      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   // ✅ Phase 2: 去掉固定的 ABC 动画，直接显示真实的思维步骤
   // 不再需要 mockSteps 和定时器
@@ -197,15 +284,47 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto no-scrollbar pt-10 pb-40">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar pt-10 pb-40">
         <div className="max-w-3xl mx-auto px-6 space-y-6">
           {/* 问题2：聊天历史顶部标记，用于滚动定位 */}
           <div ref={chatStartRef} />
           
+          {/* 当前资产信息：仅展示预览避免大 DDL/DML 卡顿 */}
+          {selectedSource && (() => {
+            const PREVIEW_MAX = 6000;
+            const content = selectedSource.content ?? '';
+            const isTruncated = content.length > PREVIEW_MAX;
+            const displayContent = isTruncated ? content.slice(0, PREVIEW_MAX) : content;
+            return (
+            <div className={`rounded-2xl border overflow-hidden animate-in fade-in duration-300 ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200 shadow-sm'}`}>
+              <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[#303030]' : 'border-gray-100'}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>当前资产</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase ${isDark ? 'text-slate-400 border-[#303030]' : 'text-slate-500 border-gray-200'}`}>{selectedSource.type}</span>
+                </div>
+                <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>{selectedSource.name}</span>
+              </div>
+              <div className={`p-4 max-h-48 overflow-y-auto custom-scrollbar ${isDark ? 'bg-black/30' : 'bg-gray-50/50'}`}>
+                <pre className={`font-mono text-[11px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  {displayContent}
+                  {isTruncated && `\n\n…（已截断，共 ${content.length.toLocaleString()} 字符，仅展示前 ${PREVIEW_MAX.toLocaleString()} 字）`}
+                </pre>
+              </div>
+            </div>
+            );
+          })()}
+
           {/* 上下文历史面板 */}
           {chatHistory.length > 0 && (
             <div className="animate-in fade-in duration-300">
               <ContextPanel theme={theme} sessionId={activeSessionId} lastUpdated={lastUpdated} />
+            </div>
+          )}
+
+          {/* 知识库：仅在选择资产后显示（与当前资产绑定） */}
+          {activeDomainName && selectedSource && (
+            <div className="animate-in fade-in duration-300">
+              <KnowledgeUploader domainId={activeDomainName} isDark={isDark} />
             </div>
           )}
           
@@ -266,7 +385,7 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
               }
               
               return (
-              <div key={i} className={`flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div key={i} ref={!isAnalyzing && i === chatHistory.length - 1 ? lastCardRef : undefined} className={`flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border shadow-sm transition-colors ${
                   msg.role === 'user' 
                     ? (isDark ? 'bg-[#1d1d1d] border-[#303030] text-slate-300' : 'bg-white border-gray-200 text-slate-600') 
@@ -282,23 +401,19 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
                       : (isDark ? 'text-slate-100' : 'text-slate-800')
                   }`}>
                     {msg.role === 'ai' && msg.result?.thinkingSteps && (
-                      <ThinkingLog steps={msg.result.thinkingSteps} theme={theme} />
+                      <ThinkingLog steps={msg.result.thinkingSteps} isLive={false} theme={theme} />
                     )}
                     
-                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">
-                      {msg.text}
+                    <div className="text-[15px] leading-relaxed font-medium">
+                      {msg.role === 'ai' && i === chatHistory.length - 1 && msg.result ? (
+                        <TypingText fullText={msg.text} animate={true} isDark={isDark} speedMs={16} />
+                      ) : (
+                        <span className={isDark ? 'text-slate-100' : 'text-slate-800'}>{msg.text}</span>
+                      )}
                     </div>
 
                     {msg.role === 'ai' && msg.result?.summary && (
-                      <div className={`mt-8 p-5 border rounded-2xl flex gap-4 transition-colors ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-100'}`}>
-                        <div className={`shrink-0 w-6 h-6 rounded-lg flex items-center justify-center border ${isDark ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-blue-100 border-blue-200 text-blue-600'}`}>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <p className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>治理成果摘要</p>
-                          <p className={`text-[13px] leading-relaxed font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{msg.result.summary}</p>
-                        </div>
-                      </div>
+                      <GovernanceSummaryCollapse result={msg.result} theme={theme} />
                     )}
                   </div>
                 </div>
@@ -308,59 +423,16 @@ export const AnalysisCenter: React.FC<AnalysisCenterProps> = ({
           )}
           
           {isAnalyzing && (() => {
-            // ✅ 显示所有思维步骤卡片，展示完整推理过程
             const lastMessage = chatHistory[chatHistory.length - 1];
             const realSteps = (lastMessage as any)?.thinkingSteps || [];
-            
             return (
-              <div className="flex gap-4">
+              <div ref={lastCardRef} className="flex gap-4">
                 <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-all ${isDark ? 'bg-[#177ddc] border-[#1668dc] text-white shadow-[0_0_15px_rgba(23,125,220,0.3)]' : 'bg-blue-600 border-blue-500 text-white shadow-md'}`}>
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex-1 space-y-4">
+                <div className="flex-1">
                   {realSteps.length > 0 ? (
-                    <>
-                      {/* ✅ 显示所有步骤 */}
-                      {realSteps.map((step: ThinkingStep, stepIdx: number) => (
-                        <div 
-                          key={`${step.phase}-${step.title}-${stepIdx}`}
-                          className={`p-6 rounded-2xl border animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-                            isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200 shadow-sm'
-                          }`}
-                          style={{ animationDelay: `${stepIdx * 100}ms` }}
-                        >
-                          <div className="flex items-center gap-3 mb-3">
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
-                              isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                            }`}>
-                              {step.phase} 阶段
-                            </span>
-                            <h4 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                              {step.title}
-                            </h4>
-                            {/* 最新步骤显示加载动画 */}
-                            {stepIdx === realSteps.length - 1 && (
-                              <Loader2 className={`w-4 h-4 animate-spin ml-auto ${isDark ? 'text-blue-500' : 'text-blue-600'}`} />
-                            )}
-                          </div>
-                          {step.description && (
-                            <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                              {step.description}
-                            </p>
-                          )}
-                          {step.details && step.details.length > 0 && (
-                            <ul className={`mt-3 space-y-1 text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                              {step.details.map((detail: string, idx: number) => (
-                                <li key={idx} className="flex items-center gap-2">
-                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-600'}`}></span>
-                                  {detail}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
-                    </>
+                    <ThinkingLog steps={realSteps} isLive={true} theme={theme} />
                   ) : (
                     <div className={`p-6 rounded-2xl border ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-white border-gray-200'}`}>
                       <div className={`flex items-center gap-3 text-xs font-bold animate-pulse ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>

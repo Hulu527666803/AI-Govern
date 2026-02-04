@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown, MessageSquare, MessageSquarePlus, Trash2, Paperclip } from 'lucide-react';
+import { Plus, Database, FileCode, FileSpreadsheet, X, Upload, BookOpen, FileText, Type, FolderPlus, Folder, ChevronRight, LayoutGrid, Server, Globe, Key, ShieldCheck, CheckCircle, ChevronDown, MessageSquare, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { SourceType, DataSource, DataDomain } from '../types';
 import { testDatabaseConnection, getDatabaseMetadata, formatMetadata, DATABASE_TYPES } from '../services/databaseService';
 import { ConfirmModal } from './ConfirmModal';
+import { SkillsManager } from './SkillsManager';
 
 interface SourceSidebarProps {
   domains: DataDomain[];
@@ -12,7 +13,7 @@ interface SourceSidebarProps {
   onAddDomain: (name: string, description: string) => void;
   onDeleteDomain?: (id: string) => void;
   onSelectDomain: (id: string) => void;
-  onAddSource: (type: SourceType, name: string, content: string) => void;
+  onAddSource: (type: SourceType, name: string, content: string) => void | Promise<void>;
   onDeleteSource?: (id: string) => void;
   onSelectSource: (source: DataSource | null) => void;
   activeSourceId?: string;
@@ -182,8 +183,8 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
       '确认删除资产',
       `确定要删除资产 "${source.name}" 吗？删除后将无法恢复。`,
       () => {
-        if (onDeleteSource && sourceToDelete) {
-          onDeleteSource(sourceToDelete.id);
+        if (onDeleteSource) {
+          onDeleteSource(source.id);
           setSourceToDelete(null);
           closeModal();
           showModal('success', '删除成功', `资产 "${source.name}" 已成功删除。`, undefined, false);
@@ -193,13 +194,7 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
     );
   };
 
-  const handleUploadAttachment = (source: DataSource, e: React.MouseEvent) => {
-    e.stopPropagation();
-    // TODO: 上传附件逻辑待定
-    showModal('info', '功能开发中', '上传附件功能正在开发中，敬请期待！', undefined, false);
-  };
-
-  const handleAssetSubmit = (e: React.FormEvent) => {
+  const handleAssetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let finalContent = "";
     
@@ -225,16 +220,18 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
       return;
     }
 
-    // 提交资产
+    // 提交资产（等待接口成功后再关弹窗并提示，失败则提示错误）
     console.log('📦 正在接入资产:', { type: assetType, name: assetName, contentLength: finalContent.length });
-    onAddSource(assetType, assetName.trim(), finalContent);
-    
-    // 重置表单并关闭模态框
-    resetAssetForm();
-    setShowAssetModal(false);
-    
-    // 成功提示
-    showModal('success', '接入成功', `资产 "${assetName.trim()}" 已成功接入！`, undefined, false);
+    const name = assetName.trim();
+    try {
+      await Promise.resolve(onAddSource(assetType, name, finalContent));
+      resetAssetForm();
+      setShowAssetModal(false);
+      showModal('success', '接入成功', `资产 "${name}" 已成功接入！`, undefined, false);
+    } catch (err) {
+      console.error('接入资产失败:', err);
+      showModal('error', '接入失败', '资产接入失败，请检查网络或后端服务后重试。', undefined, false);
+    }
   };
 
   const renderIcon = (type: SourceType) => {
@@ -354,21 +351,8 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
                     </div>
                   </button>
                   
-                  {/* 操作按钮组 */}
+                  {/* 操作按钮组（附件与知识库合并，此处仅保留删除） */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* 上传附件按钮 */}
-                    <button
-                      onClick={(e) => handleUploadAttachment(source, e)}
-                      className={`p-1.5 rounded-lg transition-all ${
-                        isDark 
-                          ? 'hover:bg-blue-500/20 hover:text-blue-400' 
-                          : 'hover:bg-blue-50 hover:text-blue-500'
-                      }`}
-                      title="上传附件"
-                    >
-                      <Paperclip size={12} />
-                    </button>
-                    
                     {/* 删除按钮 */}
                     {onDeleteSource && (
                       <button
@@ -388,6 +372,11 @@ export const SourceSidebar: React.FC<SourceSidebarProps> = ({
               ))}
             </div>
           )}
+        </div>
+
+        {/* 技能插件（公共）：左侧配置，资产/会话均可使用 */}
+        <div className={`shrink-0 border-t transition-colors ${isDark ? 'border-[#303030]' : 'border-gray-200'}`}>
+          <SkillsManager isDark={isDark} />
         </div>
       </div>
 

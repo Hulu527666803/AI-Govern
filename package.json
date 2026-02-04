@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "node tests/governance-studio-counts.test.mjs",
     "setup:mirror": "npm config set registry https://registry.npmmirror.com",
     "install:fast": "npm run setup:mirror && npm install"
   },

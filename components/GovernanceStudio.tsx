@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
-import { Layers, Network, FileSearch, Lightbulb, TableIcon, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { Layers, Network, FileSearch, Lightbulb, Download, Hash, ChevronDown, Share2, CloudUpload, AlertCircle, Clock, CheckCircle2, Copy, FileDiff } from 'lucide-react';
 import { ICONS } from '../constants';
 import { useDomain } from '../hooks/useSession';
 
@@ -8,10 +8,12 @@ import { useDomain } from '../hooks/useSession';
 import { GovernanceStudioProps, TabType, ExportType, PublishStep, FieldChanges, ExtendedFieldChanges, GovernedObject } from './governance/types';
 import { analyzeFieldChanges, analyzeExtendedFieldChanges } from './governance/utils';
 import { generateDataStructureDoc, generateRelationshipDoc, generateGovernanceDoc } from './governance/documentGenerators';
+import { governanceResultToJSONRule, buildFieldChangeRecord } from './governance/jsonRuleGenerator';
 import { renderD3Graph } from './governance/D3GraphRenderer';
 import { PublishModal } from './governance/PublishModal';
 import { ExportModal } from './governance/ExportModal';
 import { ObjectDiffCard } from './governance/ObjectDiffCard';
+import { FieldChangeViewer } from './governance/FieldChangeViewer';
 import { TimelineViewer } from './TimelineViewer';
 import { httpClient } from '../services/httpClient';
 
@@ -159,6 +161,13 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
       
       zip.file("4_数据治理说明文档/README.md", data.governanceDoc);
 
+      if (exportType === 'M3') {
+        const jsonRule = governanceResultToJSONRule(result, result.summary);
+        zip.file("结果/JSONRule.json", JSON.stringify(jsonRule, null, 2));
+        const fieldChangeRecord = buildFieldChangeRecord(result);
+        zip.file("结果/fieldChangeRecord.json", JSON.stringify(fieldChangeRecord, null, 2));
+      }
+
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
@@ -191,28 +200,15 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
   }
 
   const domains: string[] = Array.from(new Set(result.objects.map(o => o.domain || '通用业务域')));
+  /** 各域下的对象数量，用于消除「识别 44 个却只显示 6 个」的歧义 */
+  const domainCounts: Record<string, number> = domains.reduce((acc, d) => {
+    acc[d] = result.objects.filter(o => (o.domain || '通用业务域') === d).length;
+    return acc;
+  }, {} as Record<string, number>);
 
   return (
     <div className={`flex flex-col h-full transition-colors ${isDark ? 'bg-[#141414]' : 'bg-white'}`}>
       
-      {/* Asset Metadata Section */}
-      {selectedSource && (
-        <div className={`p-5 border-b transition-colors ${isDark ? 'border-[#303030]' : 'border-[#f0f0f0]'}`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>当前资产</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-tighter ${isDark ? 'text-slate-400 border-[#303030]' : 'text-slate-500 border-gray-200'}`}>{selectedSource.type}</span>
-            </div>
-          </div>
-          <h3 className={`text-sm font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedSource.name}</h3>
-          <div className={`p-3 rounded-xl border max-h-40 overflow-y-auto custom-scrollbar ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
-            <pre className={`font-mono text-[10px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              {selectedSource.content}
-            </pre>
-          </div>
-        </div>
-      )}
-
       {/* Action Bar */}
       <div className={`px-5 py-3 border-b transition-colors ${isDark ? 'bg-[#141414]/60 border-[#303030]' : 'bg-gray-50 border-[#f0f0f0]'}`}>
         <div className="flex items-center justify-between">
@@ -233,28 +229,7 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
                 时间旅行
               </button>
             )}
-            <button
-              onClick={handlePublishClick}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                isDark 
-                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20' 
-                  : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
-              }`}
-            >
-              <CloudUpload size={12} />
-              发布
-            </button>
-            <button
-              onClick={() => setIsExportModalOpen(true)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                isDark 
-                  ? 'bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20' 
-                  : 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100'
-              }`}
-            >
-              <Download size={12} />
-              导出
-            </button>
+            {/* 发布与导出统一在底部操作区，顶部不再重复 */}
           </div>
         </div>
       </div>
@@ -266,7 +241,7 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
             { id: 'ONTOLOGY', label: '业务本体', icon: <Network size={14} /> },
             { id: 'GLOSSARY', label: '业务术语', icon: <FileSearch size={14} /> },
             { id: 'METRICS', label: '业务知识', icon: <Lightbulb size={14} /> },
-            { id: 'SAMPLES', label: '对象样例', icon: <TableIcon size={14} /> },
+            { id: 'CHANGES', label: '变更记录', icon: <FileDiff size={14} /> },
           ].map(tab => (
             <button
               key={tab.id}
@@ -346,8 +321,33 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
             )}
             
             <div className={`flex items-center justify-between p-3 rounded-2xl border transition-colors ${isDark ? 'bg-[#1d1d1d]/40 border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>展示视图</span>
-              <div className={`flex gap-1.5 p-1 rounded-xl border transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-white border-gray-200'}`}>
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>展示视图</span>
+                <span className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  共 <strong>{result.objects?.length ?? 0}</strong> 个业务对象
+                  {domains.length > 1 && ` · ${domains.map(d => `${d} ${domainCounts[d]}`).join(' / ')}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const jsonRule = governanceResultToJSONRule(result, result.summary);
+                    const raw = JSON.stringify(jsonRule, null, 2);
+                    navigator.clipboard.writeText(raw).then(() => {
+                      if (typeof window !== 'undefined' && (window as any).__toast) (window as any).__toast('JSONRule 已复制到剪贴板');
+                      else alert('JSONRule 已复制到剪贴板');
+                    }).catch(() => alert('复制失败'));
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    isDark ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                  }`}
+                  title="复制当前治理结果为 JSONRule 到剪贴板"
+                >
+                  <Copy size={12} />
+                  复制 JSONRule
+                </button>
+                <div className={`flex gap-1.5 p-1 rounded-xl border transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-white border-gray-200'}`}>
                 <button 
                   onClick={() => setShowGraph(false)}
                   className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${!showGraph ? (isDark ? 'bg-[#177ddc] text-white' : 'bg-blue-600 text-white shadow-sm') : 'text-slate-500 hover:text-white'}`}
@@ -361,18 +361,26 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
                   图谱
                 </button>
               </div>
+              </div>
             </div>
 
             {showGraph ? (
-              <div className={`aspect-square w-full rounded-3xl border relative overflow-hidden flex flex-col shadow-inner transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
+              <div className={`aspect-square w-full min-h-[320px] rounded-3xl border relative overflow-hidden flex flex-col shadow-inner transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
                   <div className={`p-1.5 rounded-lg border ${isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-blue-100 text-blue-600 border-blue-200'}`}>
                     <Share2 size={12} />
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>D3 力导向本体网络</span>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                    本体星空图
+                    {result.relationships?.length != null && (
+                      <span className={`ml-2 font-normal normal-case ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        · 共 {result.relationships.length} 条关系
+                      </span>
+                    )}
+                  </span>
                 </div>
-                <div className="flex-1 cursor-grab active:cursor-grabbing">
-                  <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 400 400" className="w-full h-full" />
+                <div className="flex-1 min-h-[280px] cursor-grab active:cursor-grabbing">
+                  <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 400 400" className="w-full h-full min-h-[280px]" preserveAspectRatio="xMidYMid meet" />
                 </div>
               </div>
             ) : (
@@ -385,6 +393,7 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
                     >
                       <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedDomains[domain] === false ? '-rotate-90' : ''}`} />
                       <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{domain}</span>
+                      <span className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>({domainCounts[domain]} 个对象)</span>
                       <div className={`flex-1 h-px transition-colors ${isDark ? 'bg-[#303030]' : 'bg-gray-100'}`} />
                     </button>
                     
@@ -489,39 +498,11 @@ export const GovernanceStudio: React.FC<GovernanceStudioProps> = ({ result, them
             )}
           </div>
         )}
-
-        {activeTab === 'SAMPLES' && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-right-4">
-            {result.sampleData && result.sampleData.map((sample, idx) => (
-              <div key={idx} className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{sample.objectName} 对象样例预览</h4>
-                </div>
-                <div className={`border rounded-2xl overflow-hidden shadow-sm transition-colors ${isDark ? 'bg-black border-[#303030]' : 'bg-white border-gray-100'}`}>
-                  <div className="overflow-x-auto no-scrollbar">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className={`border-b transition-colors ${isDark ? 'bg-[#1d1d1d] border-[#303030]' : 'bg-gray-50 border-gray-100'}`}>
-                          {sample.columns.map(col => (
-                            <th key={col} className={`px-5 py-3.5 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>{col}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sample.rows.map((row, ridx) => (
-                          <tr key={ridx} className={`border-b last:border-0 hover:bg-blue-500/[0.03] transition-colors ${isDark ? 'border-[#303030]/40' : 'border-gray-50'}`}>
-                            {sample.columns.map(col => (
-                              <td key={col} className={`px-5 py-3.5 text-[11px] font-medium whitespace-nowrap ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{String(row[col])}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {activeTab === 'CHANGES' && (
+          <FieldChangeViewer 
+            record={result.fieldChangeRecord || buildFieldChangeRecord(result)} 
+            isDark={isDark} 
+          />
         )}
       </div>
 

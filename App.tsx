@@ -8,12 +8,14 @@ import { DataSource, DataDomain, GovernanceResult, SourceType, AISettings, AIEng
 import { performGovernanceAnalysis, performGovernanceAnalysisStream } from './services/aiService';
 import { InterruptConfirmModal } from './components/InterruptConfirmModal'; // ✅ Phase 3
 import { ConfirmModal } from './components/ConfirmModal'; // ✅ 通用确认弹窗
+import { ContextPanel } from './components/ContextPanel';
+import { TimelineViewer } from './components/TimelineViewer';
 import { domainService } from './services/domainService';
 import { sourceService } from './services/sourceService';
 import { sessionService } from './services/sessionService';
 import { contextService } from './services/contextService';  // ✅ 导入上下文服务
 import { httpClient } from './services/httpClient';
-import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Save, ShieldCheck, Zap, Key, Lock, Unlock } from 'lucide-react';
+import { X, LayoutDashboard, Sun, Moon, Settings as SettingsIcon, Cpu, Globe, Save, ShieldCheck, Zap, Key, Lock, Unlock, FileText, MessageSquare, Clock } from 'lucide-react';
 
 // 使用 static/img/system_icon.png 展示项目标识
 const UinoLogo = ({ theme }: { theme: 'light' | 'dark' }) => (
@@ -112,6 +114,9 @@ const App: React.FC = () => {
     showCancel: false,
   });
   
+  /** 右侧栏 Tab：治理结果 | 上下文历史 | 时间线 */
+  const [rightPanelTab, setRightPanelTab] = useState<'result' | 'context' | 'timeline'>('result');
+
   // 🔧 会话级别的状态存储：每个会话维护自己的聊天历史、分析状态和治理结果
   const [sessionStates, setSessionStates] = useState<{
     [sessionId: string]: {
@@ -698,6 +703,7 @@ const App: React.FC = () => {
       }]);
     } catch (error) {
       console.error('创建资产失败:', error);
+      throw error;
     }
   };
 
@@ -1014,10 +1020,50 @@ const App: React.FC = () => {
           </Routes>
         </section>
 
-        <aside className={`${isEmbedded ? 'w-[400px]' : 'w-[460px]'} h-full border-l flex-shrink-0 transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
-              <ErrorBoundary>
-                <GovernanceStudio result={governanceResult} theme={theme} selectedSource={selectedSource} />
-              </ErrorBoundary>
+        <aside className={`${isEmbedded ? 'w-[400px]' : 'w-[460px]'} h-full border-l flex-shrink-0 flex flex-col transition-colors ${theme === 'dark' ? 'bg-[#141414] border-[#303030]' : 'bg-white border-[#f0f0f0]'}`}>
+              <div className={`shrink-0 flex border-b ${theme === 'dark' ? 'border-[#303030]' : 'border-gray-200'}`}>
+                {[
+                  { id: 'result' as const, label: '治理结果', icon: <FileText size={14} /> },
+                  { id: 'context' as const, label: '上下文历史', icon: <MessageSquare size={14} /> },
+                  { id: 'timeline' as const, label: '时间线', icon: <Clock size={14} /> },
+                ].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setRightPanelTab(t.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                      rightPanelTab === t.id
+                        ? (theme === 'dark' ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-500/5' : 'text-blue-600 border-b-2 border-blue-600 bg-blue-50')
+                        : (theme === 'dark' ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')
+                    }`}
+                  >
+                    {t.icon}
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-hidden min-h-0">
+                <ErrorBoundary>
+                  {rightPanelTab === 'result' && <GovernanceStudio result={governanceResult} theme={theme} selectedSource={selectedSource} />}
+                  {rightPanelTab === 'context' && (
+                    <div className="h-full overflow-y-auto p-4">
+                      <ContextPanel theme={theme} sessionId={activeSessionId} lastUpdated={chatHistory.length} />
+                    </div>
+                  )}
+                  {rightPanelTab === 'timeline' && (
+                    <div className="h-full overflow-hidden">
+                      {activeSessionId ? (
+                        <TimelineViewer sessionId={activeSessionId} onClose={() => setRightPanelTab('result')} isDark={theme === 'dark'} inline />
+                      ) : (
+                        <div className={`flex flex-col items-center justify-center h-full p-6 text-center ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                          <Clock size={32} className="mb-3 opacity-50" />
+                          <p className="text-sm font-medium">请先在中间区域选择或创建会话</p>
+                          <p className="text-xs mt-1">时间线将展示该会话的治理检查点与版本</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </ErrorBoundary>
+              </div>
         </aside>
           </>
         )}
